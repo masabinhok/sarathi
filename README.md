@@ -6,6 +6,7 @@ A LangGraph chatbot (Ollama / `qwen2.5:7b`) with a FastAPI backend and a Next.js
 src/ioe/graph.py   LangGraph graph + checkpointer (shared by CLI and API)
 src/ioe/rag.py     docs/ loading, chunking, Chroma index, retrieval
 src/ioe/results.py exact lookup over the entrance pass list
+src/ioe/dates.py   current date in BS/AD, and BS->AD conversion
 src/ioe/api.py     FastAPI app, SSE token streaming
 src/ioe/main.py    terminal chat loop
 docs/              source PDFs, English translations, and lookup tables
@@ -69,7 +70,22 @@ tagged `audience: foreign` in their frontmatter are demoted unless the question 
 a foreign applicant, since most students are Nepali nationals and quota questions phrased
 generally would otherwise surface the foreign-applicant notice first.
 
+## Dates
+
+The model has no reliable sense of today's date and invents both AD and BS dates when
+asked, so `chat_node` injects the current date in both calendars on every turn, anchored
+to `Asia/Kathmandu` rather than the server's own timezone.
+
+BS arithmetic is likewise unreliable, so `dates.annotate_dates` pre-resolves every BS date
+appearing in the question or the retrieved text to its AD equivalent and an offset from
+today ("8 days ago", "in 43 days"). The model reads those off rather than calculating,
+which is what lets it answer whether a deadline has passed.
+
+## Pass list lookup
+
 The `lookup_result` node is separate from retrieval. It scans the raw question for a
-form number and, when it finds one, reads the pass list in `docs/data/` directly, so a
-result is an exact record rather than a nearest neighbour. It reads the raw question
-rather than the rewritten query so the model cannot mangle a digit.
+form number or a merit rank and, when it finds one, reads the pass list in `docs/data/`
+directly, so a result is an exact record rather than a nearest neighbour. Lookup works in
+both directions: a form number resolves to a rank, and a rank resolves to the candidate
+holding it. It reads the raw question rather than the rewritten query so the model cannot
+mangle a digit.

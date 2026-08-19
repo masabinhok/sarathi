@@ -21,6 +21,16 @@ RESULT_YEAR = "2083"
 
 # "2083-4567" written out, or a bare number qualified by form/application/symbol wording.
 _FORM_RE = re.compile(r"\b(20\d{2})[-\s]?(\d{1,6})\b")
+_RANK_RE = re.compile(
+    r"\brank(?:ed|ing)?\s*(?:no\.?|number|#)?\s*(?:is|was|=|:)?\s*(?P<num>\d{1,5})\b"
+    r"|\b(?P<num2>\d{1,5})\s*(?:st|nd|rd|th)\s*(?:merit\s*)?rank\b",
+    re.IGNORECASE,
+)
+_TOPPER_RE = re.compile(
+    r"\b(topper|topped|top\s+scorer|first\s+rank|rank\s+one|number\s+one)\b",
+    re.IGNORECASE,
+)
+
 _BARE_RE = re.compile(
     r"\b(?:form|application|admission|symbol|roll)\s*(?:no\.?|number|#)?"
     r"\s*(?:is|was|=|:)?\s*(\d{1,6})\b",
@@ -39,6 +49,54 @@ def _rows() -> dict[str, dict[str, str]]:
             for row in csv.DictReader(fh)
             if row.get("form_no")
         }
+
+
+@lru_cache(maxsize=1)
+def _by_rank() -> dict[int, dict[str, str]]:
+    """Load the pass list keyed by merit rank. Rank is unique across the list."""
+    out: dict[int, dict[str, str]] = {}
+    for row in _rows().values():
+        try:
+            out[int(row["rank"])] = row
+        except (KeyError, ValueError):
+            continue
+    return out
+
+
+def find_ranks(text: str) -> list[int]:
+    """Pull merit ranks out of a question ("rank 13", "13th rank", "who topped")."""
+    found: list[int] = []
+    for match in _RANK_RE.finditer(text):
+        num = match.group("num") or match.group("num2")
+        if num and (rank := int(num)) not in found:
+            found.append(rank)
+    if _TOPPER_RE.search(text) and 1 not in found:
+        found.insert(0, 1)
+    return found
+
+
+def lookup_rank(rank: int) -> dict[str, str] | None:
+    return _by_rank().get(rank)
+
+
+def format_rank_lookup(rank: int) -> str:
+    """Render a rank lookup as terse fields, matching format_lookup's contract."""
+    row = lookup_rank(rank)
+    if row is None:
+        highest = max(_by_rank(), default=0)
+        return (
+            f"[Pass list lookup: merit rank {rank}]\n"
+            f"Status: no candidate holds this rank on the published {RESULT_YEAR} pass list\n"
+            f"Note: ranks on this list run from 1 to {highest}."
+        )
+    return (
+        f"[Pass list lookup: merit rank {rank}]\n"
+        f"Status: on the published {RESULT_YEAR} pass list\n"
+        f"Merit rank: {row.get('rank', '')}\n"
+        f"Name: {row.get('name', '')}\n"
+        f"District: {row.get('district', '')}\n"
+        f"Form number: {row.get('form_no', '')}"
+    )
 
 
 def find_form_numbers(text: str) -> list[str]:
@@ -94,6 +152,7 @@ def format_lookup(form_no: str) -> str:
 
 
 def lookup_context(text: str, limit: int = 3) -> str:
-    """Context for every form number mentioned in the question, or "" if none are."""
-    numbers = find_form_numbers(text)[:limit]
-    return "\n\n".join(format_lookup(n) for n in numbers) if numbers else ""
+    """Context for every form number and merit rank in the question, or "" if none."""
+    blocks = [format_lookup(n) for n in find_form_numbers(text)[:limit]]
+    blocks += [format_rank_lookup(r) for r in find_ranks(text)[:limit]]
+    return "\n\n".join(blocks)

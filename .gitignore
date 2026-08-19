@@ -17,3 +17,6 @@ next-env.d.ts
 
 # Tooling caches
 .ruff_cache/
+
+# local vector index, rebuilt with `uv run ioe-index`
+.chroma/

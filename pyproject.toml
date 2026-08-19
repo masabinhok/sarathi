@@ -9,15 +9,19 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.141.1",
+    "langchain-chroma>=1.1.0",
     "langchain-ollama>=1.1.0",
+    "langchain-text-splitters>=1.1.2",
     "langgraph>=1.2.11",
     "python-dotenv>=1.2.3",
+    "pyyaml>=6.0.3",
     "ruff>=0.16.3",
     "uvicorn[standard]>=0.52.4",
 ]
 
 [project.scripts]
 ioe = "ioe.main:main"
+ioe-index = "ioe.rag:main"
 
 [build-system]
 requires = ["uv_build>=0.12.1,<0.13.0"]

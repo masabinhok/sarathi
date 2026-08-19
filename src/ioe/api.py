@@ -46,7 +46,11 @@ async def _stream(message: str, thread_id: str) -> AsyncIterator[str]:
             _config(thread_id),
             stream_mode="messages",
         )
-        async for chunk, _metadata in stream:
+        async for chunk, metadata in stream:
+            # The graph also calls the model to rewrite follow-up queries for retrieval;
+            # only the answer node's tokens belong in the UI.
+            if metadata.get("langgraph_node") != "chat_node":
+                continue
             text = chunk.content
             if text:
                 yield _sse("token", {"text": text})

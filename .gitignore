@@ -9,6 +9,10 @@ wheels/
 # Virtual environments
 .venv
 
+# Secrets — ADMIN_TOKEN lives here
+.env
+.env.local
+
 # Node / Next.js
 node_modules/
 .next/
@@ -20,3 +24,6 @@ next-env.d.ts
 
 # local vector index, rebuilt with `uv run ioe-index`
 .chroma/
+
+# scraped notice cache, rebuilt with `uv run ioe-notices`
+.cache/

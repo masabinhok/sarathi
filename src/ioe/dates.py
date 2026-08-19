@@ -98,3 +98,27 @@ def annotate_dates(text: str, today: datetime.date | None = None) -> str:
         "[Date conversions, computed - use these rather than calculating]\n"
         + "\n".join(lines)
     )
+
+
+def ad_to_bs_labels(iso_date: str) -> tuple[str, str]:
+    """Convert an ISO AD date to ("2083/05/03", "2083 Bhadau 3"). ("", "") if unparseable."""
+    try:
+        ad = datetime.date.fromisoformat(iso_date)
+        bs = nepali_datetime.date.from_datetime_date(ad)
+    except (ValueError, TypeError):
+        return "", ""
+    month = BS_MONTHS[bs.month - 1] if 1 <= bs.month <= 12 else str(bs.month)
+    return f"{bs.year}/{bs.month:02d}/{bs.day:02d}", f"{bs.year} {month} {bs.day}"
+
+
+def today_payload() -> dict:
+    """Today in both calendars, for the UI masthead."""
+    today = today_in_nepal()
+    bs_date, bs_label = ad_to_bs_labels(today.isoformat())
+    return {
+        "ad_date": today.isoformat(),
+        "ad_label": today.strftime("%d %B %Y"),
+        "weekday": today.strftime("%A"),
+        "bs_date": bs_date,
+        "bs_label": bs_label,
+    }

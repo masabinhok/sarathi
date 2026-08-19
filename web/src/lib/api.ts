@@ -71,3 +71,69 @@ export async function fetchHistory(threadId: string): Promise<Message[]> {
   if (!response.ok) return [];
   return response.json();
 }
+
+
+export type Today = {
+  ad_date: string;
+  ad_label: string;
+  weekday: string;
+  bs_date: string;
+  bs_label: string;
+};
+
+export type Notice = {
+  title: string;
+  url: string;
+  date: string;
+  source: string;
+  source_label: string;
+  bs_date: string;
+  bs_label: string;
+};
+
+export type NoticeFeed = {
+  updated_at: string;
+  sources: Record<string, { label: string; url: string; count: number; error: string }>;
+  notices: Notice[];
+};
+
+export type Deadline = {
+  bs_date: string;
+  bs_label: string;
+  ad_date: string;
+  days: number;
+  status: "upcoming" | "today" | "passed";
+  snippet: string;
+  document: string;
+  url: string;
+  file: string;
+};
+
+export type DeadlineFeed = {
+  today_nepal: string;
+  upcoming: Deadline[];
+  passed: Deadline[];
+};
+
+async function getJSON<T>(path: string): Promise<T> {
+  const response = await fetch(`${API_URL}${path}`);
+  if (!response.ok) throw new Error(`${path} returned ${response.status}`);
+  return response.json();
+}
+
+export const fetchToday = () => getJSON<Today>("/api/today");
+export const fetchNotices = () => getJSON<NoticeFeed>("/api/notices");
+export const fetchDeadlines = () => getJSON<DeadlineFeed>("/api/deadlines");
+
+/** Admin calls carry the shared token; the caller holds it, it is never persisted here. */
+export async function adminFetch(path: string, token: string, init: RequestInit = {}) {
+  const response = await fetch(`${API_URL}${path}`, {
+    ...init,
+    headers: { ...(init.headers ?? {}), "X-Admin-Token": token },
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(body?.detail ?? `request failed (${response.status})`);
+  }
+  return body;
+}

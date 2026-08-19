@@ -1,26 +1,92 @@
 @import "tailwindcss";
 
+/* Palette drawn from the documents this app serves: stamp-ink navy from official
+   letterheads, cool bond paper, the crimson of a Nepali government seal reserved for
+   dates that have passed, and a muted gold for the seal rule itself. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --paper: #f2f4f6;
+  --paper-raised: #ffffff;
+  --ink: #0f2438;
+  --ink-soft: #55677a;
+  --ink-faint: #8496a6;
+  --line: #d5dce2;
+  --line-strong: #b6c1cb;
+  --crimson: #9b2226;
+  --gold: #8a6a1c;
+  --sky: #1d5b8f;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --paper: #0b1725;
+    --paper-raised: #12263a;
+    --ink: #e7edf3;
+    --ink-soft: #9db0c2;
+    --ink-faint: #6b8095;
+    --line: #1e3450;
+    --line-strong: #2c4a68;
+    --crimson: #e06c70;
+    --gold: #d0a64a;
+    --sky: #6fb2e8;
   }
 }
 
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-raised: var(--paper-raised);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-crimson: var(--crimson);
+  --color-gold: var(--gold);
+  --color-sky: var(--sky);
+  --font-sans: var(--font-plex-sans), var(--font-plex-deva), system-ui, sans-serif;
+  --font-serif: var(--font-source-serif), Georgia, serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+/* The date-pair: BS above, AD beneath a hairline. The recurring device of this design. */
+.datepair {
+  display: inline-flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+.datepair-bs {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+.datepair-ad {
+  font-size: 0.6875rem;
+  color: var(--ink-faint);
+  border-top: 1px solid var(--line);
+  padding-top: 2px;
+  margin-top: 2px;
+  letter-spacing: 0.04em;
+}
+
+.eyebrow {
+  font-size: 0.6875rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

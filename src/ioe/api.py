@@ -1,14 +1,28 @@
+import asyncio
 import json
+import os
+import re
 import uuid
 from collections.abc import AsyncIterator
+from pathlib import Path
+from typing import Annotated
 
-from fastapi import FastAPI
+from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel
 from starlette.responses import StreamingResponse
 
+from ioe import notices as notices_mod
+from ioe.dates import today_payload
+from ioe.deadlines import as_payload as deadlines_payload
 from ioe.graph import TEXT_MODEL, chatbot
+from ioe.rag import DOCS_DIR, EMB_MODEL, build_index, load_documents
+
+# Read .env before anything reads os.environ, so ADMIN_TOKEN can live in a file
+# rather than the shell that happens to launch uvicorn.
+load_dotenv()
 
 app = FastAPI(title="ioe chat api")
 
@@ -90,3 +104,131 @@ async def chat(req: ChatRequest) -> StreamingResponse:
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# --- notices and deadlines -------------------------------------------------------------
+
+
+@app.get("/api/today")
+async def today() -> dict:
+    return today_payload()
+
+
+@app.get("/api/notices")
+async def notices() -> dict:
+    """Cached notices scraped from IOE/TU/campus sites. Never scrapes on request."""
+    return notices_mod.load()
+
+
+@app.get("/api/deadlines")
+async def deadlines() -> dict:
+    return deadlines_payload()
+
+
+# --- admin -----------------------------------------------------------------------------
+
+UPLOAD_DIR = DOCS_DIR / "translated"
+SAFE_NAME = re.compile(r"^[A-Za-z0-9._-]+\.md$")
+MAX_UPLOAD_BYTES = 2_000_000
+
+
+def require_admin(x_admin_token: str = Header(default="")) -> None:
+    """Gate admin routes on a shared secret.
+
+    An unset ADMIN_TOKEN denies everything rather than allowing everything: a missing
+    config should never be the thing that opens up write access.
+    """
+    expected = os.environ.get("ADMIN_TOKEN", "")
+    if not expected:
+        raise HTTPException(503, "ADMIN_TOKEN is not configured on the server")
+    if x_admin_token != expected:
+        raise HTTPException(401, "invalid admin token")
+
+
+@app.get("/api/admin/status", dependencies=[Depends(require_admin)])
+async def admin_status() -> dict:
+    chunks = await asyncio.to_thread(load_documents)
+    per_file: dict[str, int] = {}
+    for chunk in chunks:
+        name = chunk.metadata.get("file", "?")
+        per_file[name] = per_file.get(name, 0) + 1
+
+    files = []
+    for path in sorted(UPLOAD_DIR.glob("*.md")):
+        if path.name.startswith("_"):
+            continue
+        files.append(
+            {
+                "name": path.name,
+                "bytes": path.stat().st_size,
+                "chunks": per_file.get(path.name, 0),
+            }
+        )
+    return {
+        "documents": files,
+        "total_chunks": len(chunks),
+        "text_model": TEXT_MODEL,
+        "embedding_model": EMB_MODEL,
+    }
+
+
+@app.post("/api/admin/documents", dependencies=[Depends(require_admin)])
+async def upload_document(file: Annotated[UploadFile, File()]) -> dict:
+    raw_name = file.filename or ""
+    # Reject a path-bearing name outright rather than silently saving its basename:
+    # taking the basename is safe, but writing a file under a name the caller did not
+    # send is worse than telling them no.
+    if raw_name != Path(raw_name).name or not SAFE_NAME.match(raw_name):
+        raise HTTPException(400, "filename must be a plain ASCII .md name with no path")
+    name = raw_name
+
+    raw = await file.read()
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise HTTPException(413, "file is larger than 2 MB")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        raise HTTPException(400, "file must be UTF-8 text") from None
+    if not text.lstrip().startswith("---"):
+        raise HTTPException(
+            400, "file must start with YAML frontmatter (see docs/README.md)"
+        )
+
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    target = UPLOAD_DIR / name
+    replaced = target.exists()
+    target.write_text(text, encoding="utf-8")
+    return {
+        "name": name,
+        "bytes": len(raw),
+        "replaced": replaced,
+        "reindex_required": True,
+    }
+
+
+@app.delete("/api/admin/documents/{name}", dependencies=[Depends(require_admin)])
+async def delete_document(name: str) -> dict:
+    safe = Path(name).name
+    if not SAFE_NAME.match(safe):
+        raise HTTPException(400, "invalid document name")
+    target = UPLOAD_DIR / safe
+    if not target.exists():
+        raise HTTPException(404, "no such document")
+    target.unlink()
+    return {"name": safe, "deleted": True, "reindex_required": True}
+
+
+@app.post("/api/admin/reindex", dependencies=[Depends(require_admin)])
+async def reindex() -> dict:
+    count = await asyncio.to_thread(build_index)
+    return {"chunks": count}
+
+
+@app.post("/api/admin/notices/refresh", dependencies=[Depends(require_admin)])
+async def refresh_notices() -> dict:
+    payload = await asyncio.to_thread(notices_mod.refresh)
+    return {
+        "updated_at": payload["updated_at"],
+        "count": len(payload["notices"]),
+        "sources": payload["sources"],
+    }

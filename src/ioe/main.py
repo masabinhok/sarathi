@@ -11,8 +11,11 @@ def main() -> None:
         if user_input.strip().lower() in ["exit", "bye", "quit"]:
             break
 
-        result = chatbot.invoke({"messages": [HumanMessage(content=user_input)]}, config)
+        result = chatbot.invoke(
+            {"messages": [HumanMessage(content=user_input)]}, config
+        )
         print("Bot:", result["messages"][-1].content)
+
 
 
 if __name__ == "__main__":

@@ -4,14 +4,15 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import MessagesState
 
-from ioe.rag import format_context, get_store
+from ioe.rag import format_context, get_store, rerank
+from ioe.results import lookup_context
 
 TEXT_MODEL = "qwen2.5:7b"
 
 # Chunks retrieved per question, and the cosine relevance floor a chunk must clear.
 # Measured separation on bge-m3 is wide (~0.6 on topic vs ~0.3 off topic), so this
 # mainly exists to keep unrelated chunks out of the prompt when a question misses.
-TOP_K = 4
+TOP_K = 6
 MIN_RELEVANCE = 0.45
 
 SYSTEM_PROMPT = SystemMessage(
@@ -29,6 +30,12 @@ student asks about anything else -- coding, homework, general knowledge, other \
 universities, personal advice -- you must refuse. Do not answer the off-topic question \
 even partially. Say in one sentence that you only handle IOE admission and entrance \
 questions, then invite them to ask one.
+
+Using a pass list lookup:
+- A "Pass list lookup" block below is an exact record from the published result table, not a guess. Never alter a rank, name, or district from it.
+- Restate the record as an ordinary sentence to the student. Do not copy the block itself: neither its bracketed header nor its field labels.
+- If the lookup says the number does not appear on the list, say so plainly, note that this cannot distinguish a candidate who did not pass from a mistyped number, and suggest verifying on entrance.ioe.edu.np. Be kind about it; this is hard news to receive.
+- Never guess whether a candidate passed, and never infer a rank from a form number.
 
 Using the reference documents:
 - Reference documents may be supplied below under "Reference documents". When they \
@@ -67,6 +74,7 @@ Standalone search query:"""
 class ChatState(MessagesState):
     query: str
     context: str
+    lookup: str
 
 
 model = ChatOllama(model=TEXT_MODEL)
@@ -102,14 +110,23 @@ def rewrite_query(state: ChatState) -> dict:
 def retrieve(state: ChatState) -> dict:
     """Fetch supporting chunks. An empty or missing index simply yields no context."""
     try:
+        # Over-fetch so a demoted chunk can actually be displaced by a better-suited one.
         hits = get_store().similarity_search_with_relevance_scores(
-            state["query"], k=TOP_K
+            state["query"], k=TOP_K * 2
         )
     except Exception:  # noqa: BLE001 - an unbuilt index must degrade to no context, not 500
         return {"context": ""}
 
-    kept = [doc for doc, score in hits if score >= MIN_RELEVANCE]
+    ordered = rerank(state["query"], hits)
+    kept = [doc for doc, score in ordered if score >= MIN_RELEVANCE][:TOP_K]
     return {"context": format_context(kept) if kept else ""}
+
+
+def lookup_result(state: ChatState) -> dict:
+    """Answer form-number questions from the exact pass list, not from retrieval."""
+    question = state["messages"][-1].content
+    # Search the raw question, not the rewrite, so the model cannot mangle a number.
+    return {"lookup": lookup_context(question)}
 
 
 def chat_node(state: ChatState) -> dict:
@@ -117,6 +134,9 @@ def chat_node(state: ChatState) -> dict:
     context = state.get("context")
 
     prompt = [SYSTEM_PROMPT]
+    lookup = state.get("lookup")
+    if lookup:
+        prompt.append(SystemMessage(content=lookup))
     if context:
         prompt.append(SystemMessage(content=f"Reference documents:\n\n{context}"))
     prompt.extend(messages)
@@ -128,12 +148,15 @@ graph = StateGraph(ChatState)
 
 graph.add_node("rewrite_query", rewrite_query)
 graph.add_node("retrieve", retrieve)
+graph.add_node("lookup_result", lookup_result)
 graph.add_node("chat_node", chat_node)
 
 graph.add_edge(START, "rewrite_query")
 graph.add_edge("rewrite_query", "retrieve")
-graph.add_edge("retrieve", "chat_node")
+graph.add_edge("retrieve", "lookup_result")
+graph.add_edge("lookup_result", "chat_node")
 graph.add_edge("chat_node", END)
+
 
 checkpointer = InMemorySaver()
 

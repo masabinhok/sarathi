@@ -5,9 +5,10 @@ A LangGraph chatbot (Ollama / `qwen2.5:7b`) with a FastAPI backend and a Next.js
 ```
 src/ioe/graph.py   LangGraph graph + checkpointer (shared by CLI and API)
 src/ioe/rag.py     docs/ loading, chunking, Chroma index, retrieval
+src/ioe/results.py exact lookup over the entrance pass list
 src/ioe/api.py     FastAPI app, SSE token streaming
 src/ioe/main.py    terminal chat loop
-docs/              English source documents indexed for retrieval
+docs/              source PDFs, English translations, and lookup tables
 web/               Next.js frontend
 ```
 
@@ -50,7 +51,7 @@ and replays history on load.
 
 ## Retrieval
 
-The graph runs `rewrite_query -> retrieve -> chat_node`. The rewrite step condenses a
+The graph runs `rewrite_query -> retrieve -> lookup_result -> chat_node`. The rewrite step condenses a
 follow-up ("what about the fees?") into a standalone query using recent history, since
 a bare follow-up embeds poorly on its own. Retrieval pulls the top `TOP_K` chunks from
 Chroma above a cosine relevance floor, and the answer node cites the title and year of
@@ -62,3 +63,13 @@ retriever's. See `docs/README.md` for the document format.
 
 With no index built, or when nothing clears the relevance floor, retrieval yields no
 context and the bot says it lacks the document rather than answering from memory.
+
+Retrieval over-fetches `TOP_K * 2` chunks and re-ranks before trimming. Documents
+tagged `audience: foreign` in their frontmatter are demoted unless the question mentions
+a foreign applicant, since most students are Nepali nationals and quota questions phrased
+generally would otherwise surface the foreign-applicant notice first.
+
+The `lookup_result` node is separate from retrieval. It scans the raw question for a
+form number and, when it finds one, reads the pass list in `docs/data/` directly, so a
+result is an exact record rather than a nearest neighbour. It reads the raw question
+rather than the rewritten query so the model cannot mangle a digit.

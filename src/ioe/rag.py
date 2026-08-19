@@ -1,5 +1,6 @@
 """Document loading, indexing, and retrieval over the `docs/` folder."""
 
+import re
 from pathlib import Path
 
 import yaml
@@ -17,6 +18,7 @@ emb_model = OllamaEmbeddings(model=EMB_MODEL)
 DOCS_DIR = Path(__file__).resolve().parents[2] / "docs"
 INDEX_DIR = Path(__file__).resolve().parents[2] / ".chroma"
 COLLECTION = "ioe_docs"
+SKIP_DIRS = {"downloads", "data"}
 
 # Sections longer than this are split again; overlap keeps a split table or list readable.
 MAX_CHUNK = 1200
@@ -45,8 +47,11 @@ def load_documents() -> list[Document]:
     )
 
     chunks: list[Document] = []
-    for path in sorted(DOCS_DIR.glob("*.md")):
+    for path in sorted(DOCS_DIR.rglob("*.md")):
         if path.name.startswith("_") or path.name == "README.md":
+            continue
+        # downloads/ holds the untranslated source PDFs; data/ holds lookup tables.
+        if any(part in SKIP_DIRS for part in path.relative_to(DOCS_DIR).parts[:-1]):
             continue
 
         meta, body = _split_frontmatter(path.read_text(encoding="utf-8"))
@@ -119,3 +124,38 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+# Most applicants are Nepali nationals, so documents written only for foreign applicants
+# are demoted unless the question actually signals one. The penalty is larger than the
+# spread between competing chunks on a quota question (~0.03), so it reliably reorders,
+# but small enough that a foreign-only document still surfaces when nothing else matches.
+FOREIGN_PENALTY = 0.10
+_FOREIGN_HINTS = re.compile(
+    r"\b(foreign|foreigner|foreigners|international|non-?nepali|overseas|abroad|"
+    r"embassy|passport|nrn|expatriate)\b",
+    re.IGNORECASE,
+)
+
+
+def mentions_foreign_applicant(query: str) -> bool:
+    return bool(_FOREIGN_HINTS.search(query))
+
+
+def rerank(
+    query: str, hits: list[tuple[Document, float]]
+) -> list[tuple[Document, float]]:
+    """Re-order hits so the majority audience leads, without dropping anything."""
+    if mentions_foreign_applicant(query):
+        return hits
+
+    adjusted = [
+        (
+            doc,
+            score - FOREIGN_PENALTY
+            if doc.metadata.get("audience") == "foreign"
+            else score,
+        )
+        for doc, score in hits
+    ]
+    return sorted(adjusted, key=lambda pair: pair[1], reverse=True)

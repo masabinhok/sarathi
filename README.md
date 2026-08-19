@@ -1,91 +1,251 @@
-# ioe
+# IOE Admission Assistant
 
-A LangGraph chatbot (Ollama / `qwen2.5:7b`) with a FastAPI backend and a Next.js chat UI.
+A retrieval-backed assistant for students applying to the Institute of Engineering (IOE),
+Tribhuvan University, Nepal. It answers questions about the BE/BArch entrance examination
+and admission process from official IOE notices, looks up published entrance results by
+form number or merit rank, and tracks admission deadlines in both Bikram Sambat and
+Gregorian calendars.
+
+Everything runs locally. No API keys, no cloud inference — the language and embedding
+models run on your own machine through Ollama.
 
 ```
-src/ioe/graph.py   LangGraph graph + checkpointer (shared by CLI and API)
-src/ioe/rag.py     docs/ loading, chunking, Chroma index, retrieval
-src/ioe/results.py exact lookup over the entrance pass list
-src/ioe/dates.py   current date in BS/AD, and BS->AD conversion
-src/ioe/api.py     FastAPI app, SSE token streaming
-src/ioe/main.py    terminal chat loop
-docs/              source PDFs, English translations, and lookup tables
-web/               Next.js frontend
+src/ioe/graph.py      LangGraph graph: query rewrite -> retrieve -> lookup -> answer
+src/ioe/rag.py        document loading, chunking, Chroma index, retrieval + reranking
+src/ioe/results.py    exact lookup over the published entrance pass list
+src/ioe/dates.py      current date in BS/AD, Bikram Sambat conversion
+src/ioe/deadlines.py  dated obligations mined from the indexed documents
+src/ioe/notices.py    scraper for IOE / TU / campus notice boards
+src/ioe/api.py        FastAPI app: SSE chat streaming, notices, deadlines, admin
+src/ioe/main.py       terminal chat loop
+docs/                 source PDFs, English translations, and lookup tables
+web/                  Next.js frontend
 ```
 
-## Running
+## Requirements
 
-Ollama must be running with `qwen2.5:7b` and `bge-m3` pulled.
+| Tool   | Version tested | Notes                                        |
+| ------ | -------------- | -------------------------------------------- |
+| Python | 3.12.3         | 3.12 or newer is required                    |
+| uv     | 0.12.1         | manages the virtualenv and dependencies      |
+| Node   | 22.23.1        | for the Next.js frontend                     |
+| npm    | 10.9.8         | ships with Node                              |
+| Ollama | 0.32.6         | runs both models locally                     |
 
-Build the retrieval index first (and again after any change under `docs/`):
+You need roughly **6 GB of free disk** for the two Ollama models and about **8 GB of RAM**
+to run the 7B model comfortably.
+
+## Setup
+
+### 1. Install the prerequisites
+
+If you do not already have them:
+
+```bash
+# uv (Python package manager)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Ollama
+curl -fsSL https://ollama.com/install.sh | sh
+```
+
+Install Node 22 or newer from https://nodejs.org or your package manager.
+
+### 2. Clone and install Python dependencies
+
+```bash
+git clone <your-repo-url> ioe
+cd ioe
+uv sync
+```
+
+`uv sync` creates `.venv/` and installs everything from `uv.lock`. You do not need to
+create a virtualenv yourself, and you do not need to activate it — every command below
+uses `uv run`, which uses `.venv` automatically.
+
+If you prefer an activated shell (so you can call `python`, `uvicorn`, and `pytest`
+directly without the `uv run` prefix):
+
+```bash
+source .venv/bin/activate
+```
+
+### 3. Pull the Ollama models
+
+```bash
+ollama pull qwen2.5:7b     # ~4.7 GB, generates the answers
+ollama pull bge-m3         # ~1.2 GB, embeds documents and questions
+```
+
+`bge-m3` is multilingual, which is what lets English questions match Nepali source text.
+
+Make sure the Ollama server is running before you start the backend:
+
+```bash
+ollama serve      # not needed if Ollama runs as a system service
+ollama list       # should show both models
+```
+
+### 4. Build the retrieval index
 
 ```bash
 uv run ioe-index
 ```
 
-Backend (port 8000):
+This chunks every Markdown file under `docs/translated/` and embeds it into a local
+Chroma store at `.chroma/`. It takes a minute or two on first run. Expect output like:
 
-```bash
-uv run uvicorn ioe.api:app --reload --port 8000
+```
+indexed 189 chunks from /path/to/ioe/docs
 ```
 
-Frontend (port 3000):
+**The bot cannot answer document questions until this runs.** Re-run it after adding or
+editing anything in `docs/translated/`.
+
+### 5. Fetch the notice board (optional)
 
 ```bash
+uv run ioe-notices
+```
+
+Scrapes recent notices from entrance.ioe.edu.np, ioe.tu.edu.np, tu.edu.np, and
+pcampus.edu.np into `.cache/notices.json`. The app reads only that cache and never
+scrapes on request, so it works offline and stays fast. Skipping this leaves the notices
+section empty; nothing else is affected.
+
+### 6. Install frontend dependencies
+
+```bash
+cd web
+npm install
+cd ..
+```
+
+## Running
+
+Three processes. Ollama must be running for the other two to work.
+
+```bash
+# terminal 1 - Ollama (skip if it runs as a system service)
+ollama serve
+
+# terminal 2 - backend on port 8000
+uv run uvicorn ioe.api:app --reload --port 8000
+
+# terminal 3 - frontend on port 3000
 cd web && npm run dev
 ```
 
-Then open http://localhost:3000. The terminal chat loop still works via `uv run ioe`.
+Open http://localhost:3000.
+
+A terminal-only chat loop is also available, with no frontend needed:
+
+```bash
+uv run ioe
+```
+
+### Checking it works
+
+```bash
+curl localhost:8000/api/health
+# {"status":"ok","model":"qwen2.5:7b"}
+```
+
+If the browser reports **"CORS request did not succeed"** with a null status code, the
+backend is not running — a refused connection produces no response and therefore no CORS
+headers. Check `/api/health` before suspecting the CORS configuration.
+
+## Configuration
+
+Create a `.env` file in the repository root:
+
+```bash
+ADMIN_TOKEN=choose-a-long-random-string
+```
+
+`ADMIN_TOKEN` guards the admin endpoints (document upload, reindex, notice refresh). If
+it is unset, every admin route returns 503 — a missing token denies access rather than
+granting it, so an unconfigured deployment is never accidentally open.
+
+The frontend reads `NEXT_PUBLIC_API_URL` and falls back to `http://localhost:8000`. Set
+it in `web/.env.local` if the backend runs elsewhere.
 
 ## API
 
-| Method | Path                     | Description                              |
-| ------ | ------------------------ | ---------------------------------------- |
-| GET    | `/api/health`            | Status + active model                    |
-| POST   | `/api/chat`              | `{message, thread_id?}` → SSE token stream |
-| GET    | `/api/history/{thread}`  | Replay a thread's messages               |
-| POST   | `/api/thread`            | Mint a new thread id                     |
+| Method | Path                          | Auth  | Description                                |
+| ------ | ----------------------------- | ----- | ------------------------------------------ |
+| GET    | `/api/health`                 | —     | Status and active model                    |
+| POST   | `/api/chat`                   | —     | `{message, thread_id?}` → SSE token stream |
+| GET    | `/api/history/{thread_id}`    | —     | Replay a thread's messages                 |
+| POST   | `/api/thread`                 | —     | Mint a new thread id                       |
+| GET    | `/api/today`                  | —     | Today's date in BS and AD                  |
+| GET    | `/api/notices`                | —     | Cached notices from IOE/TU/campus sites    |
+| GET    | `/api/deadlines`              | —     | Deadlines mined from indexed documents     |
+| GET    | `/api/admin/status`           | token | Indexed documents and chunk counts         |
+| POST   | `/api/admin/documents`        | token | Upload a translated `.md` file             |
+| DELETE | `/api/admin/documents/{name}` | token | Remove a document                          |
+| POST   | `/api/admin/reindex`          | token | Rebuild the vector store                   |
+| POST   | `/api/admin/notices/refresh`  | token | Re-scrape the notice boards                |
+
+Admin routes take the token in an `X-Admin-Token` header:
+
+```bash
+curl -H "X-Admin-Token: $ADMIN_TOKEN" localhost:8000/api/admin/status
+```
 
 Conversation state lives in LangGraph's `InMemorySaver`, keyed by `thread_id`, so it
 resets when the backend restarts. The frontend keeps its `thread_id` in `localStorage`
 and replays history on load.
 
-## Retrieval
+## How answers are produced
 
-The graph runs `rewrite_query -> retrieve -> lookup_result -> chat_node`. The rewrite step condenses a
-follow-up ("what about the fees?") into a standalone query using recent history, since
-a bare follow-up embeds poorly on its own. Retrieval pulls the top `TOP_K` chunks from
-Chroma above a cosine relevance floor, and the answer node cites the title and year of
-whatever it used.
+The graph runs `rewrite_query → retrieve → lookup_result → chat_node`.
 
-`bge-m3` embeds the chunks. It is multilingual, so English queries do match Nepali
-source text -- documents are translated to English for the generator's benefit, not the
-retriever's. See `docs/README.md` for the document format.
+**Query rewriting** condenses a follow-up ("what about the fees?") into a standalone
+query using recent history, because a bare follow-up embeds poorly on its own.
 
-With no index built, or when nothing clears the relevance floor, retrieval yields no
-context and the bot says it lacks the document rather than answering from memory.
+**Retrieval** over-fetches `TOP_K * 2` chunks from Chroma, re-ranks them, and trims to
+`TOP_K`. Documents tagged `audience: foreign` in their frontmatter are demoted unless the
+question mentions a foreign applicant, since most students are Nepali nationals. Chunks
+below a cosine relevance floor are dropped; when nothing clears it, the bot says it lacks
+the document rather than answering from memory.
 
-Retrieval over-fetches `TOP_K * 2` chunks and re-ranks before trimming. Documents
-tagged `audience: foreign` in their frontmatter are demoted unless the question mentions
-a foreign applicant, since most students are Nepali nationals and quota questions phrased
-generally would otherwise surface the foreign-applicant notice first.
+**Pass list lookup** is separate from retrieval. The published result list is a
+7,179-row table, and vector search over names and form numbers returns near-noise, so
+`lookup_result` scans the raw question for a form number or merit rank and reads the CSV
+in `docs/data/` directly. It works in both directions: a form number resolves to a rank,
+and a rank resolves to the candidate holding it. It reads the raw question rather than
+the rewritten one so the model cannot mangle a digit.
 
-## Dates
+**Dates** are injected on every turn. The model has no reliable sense of today's date and
+is poor at Bikram Sambat arithmetic, so the current date is supplied in both calendars —
+anchored to `Asia/Kathmandu`, not the server's timezone — and every BS date in the
+question or retrieved text is pre-resolved to AD with an offset from today ("8 days ago",
+"in 43 days"). The model reads those off rather than calculating.
 
-The model has no reliable sense of today's date and invents both AD and BS dates when
-asked, so `chat_node` injects the current date in both calendars on every turn, anchored
-to `Asia/Kathmandu` rather than the server's own timezone.
+## Adding documents
 
-BS arithmetic is likewise unreliable, so `dates.annotate_dates` pre-resolves every BS date
-appearing in the question or the retrieved text to its AD equivalent and an offset from
-today ("8 days ago", "in 43 days"). The model reads those off rather than calculating,
-which is what lets it answer whether a deadline has passed.
+See `docs/README.md` for the document format, the frontmatter contract, and translation
+guidance. In short:
 
-## Pass list lookup
+- `docs/downloads/` holds the original PDFs, for provenance. Never indexed.
+- `docs/translated/` holds English Markdown with YAML frontmatter. This is what gets
+  indexed and quoted back to students.
+- `docs/data/` holds lookup tables (CSV) queried exactly. Never indexed.
 
-The `lookup_result` node is separate from retrieval. It scans the raw question for a
-form number or a merit rank and, when it finds one, reads the pass list in `docs/data/`
-directly, so a result is an exact record rather than a nearest neighbour. Lookup works in
-both directions: a form number resolves to a rank, and a rank resolves to the candidate
-holding it. It reads the raw question rather than the rewritten query so the model cannot
-mangle a digit.
+After changing anything under `docs/translated/`, rebuild:
+
+```bash
+uv run ioe-index
+```
+
+## Development
+
+```bash
+uv run ruff check src/ioe/        # lint
+uv run ruff format src/ioe/       # format
+cd web && npm run lint            # frontend lint
+```
+
+Generated artifacts are gitignored and rebuilt with the commands above: `.venv/`,
+`.chroma/`, `.cache/`, `web/node_modules/`, `web/.next/`.

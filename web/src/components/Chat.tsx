@@ -1,17 +1,24 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { fetchHistory, sendMessage, type Message } from "@/lib/api";
+import RichText from "@/components/RichText";
+import {
+  fetchHealth,
+  fetchHistory,
+  sendMessage,
+  type Health,
+  type Message,
+} from "@/lib/api";
 
 const THREAD_KEY = "ioe.thread_id";
 
-// Phrased the way a student would actually ask, and each one exercises a different path:
+// Phrased the way a student actually asks, and each one exercises a different path:
 // retrieval, the pass list, the date logic, the payment guides.
-const PROMPTS = [
-  "What subjects are on the BE entrance exam?",
+const CHIPS = [
+  "What's on the entrance syllabus?",
   "Did form 2083-4001 pass?",
-  "Has the quota document deadline passed?",
-  "How do I pay the entrance fee with eSewa?",
+  "Has the quota deadline passed?",
+  "Pay the fee with eSewa",
 ];
 
 export default function Chat() {
@@ -19,17 +26,34 @@ export default function Chat() {
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [health, setHealth] = useState<Health | null>(null);
+  // Distinguishes "not asked yet" from "asked and it is down", so the status line
+  // never claims the assistant is offline before the first request has returned.
+  const [reachable, setReachable] = useState<boolean | null>(null);
   const threadId = useRef<string | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
 
-  // Restore the previous conversation so a refresh doesn't lose the thread.
   useEffect(() => {
+    let live = true;
+    fetchHealth()
+      .then((value) => {
+        if (!live) return;
+        setHealth(value);
+        setReachable(value.status === "ok");
+      })
+      .catch(() => live && setReachable(false));
+
+    // Restore the previous conversation so a refresh doesn't lose the thread.
     const saved = localStorage.getItem(THREAD_KEY);
-    if (!saved) return;
-    threadId.current = saved;
-    fetchHistory(saved)
-      .then(setMessages)
-      .catch(() => {});
+    if (saved) {
+      threadId.current = saved;
+      fetchHistory(saved)
+        .then((value) => live && setMessages(value))
+        .catch(() => {});
+    }
+    return () => {
+      live = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -80,7 +104,7 @@ export default function Chat() {
     }
   }
 
-  function reset() {
+  function startOver() {
     localStorage.removeItem(THREAD_KEY);
     threadId.current = null;
     setMessages([]);
@@ -91,75 +115,110 @@ export default function Chat() {
 
   return (
     <section
-      aria-labelledby="ask-heading"
-      className="border-line bg-paper-raised rounded-sm border shadow-[0_1px_0_rgba(15,36,56,0.04)]"
+      aria-label="Ask the assistant"
+      className="bg-shell flex min-h-0 min-w-0 flex-col lg:h-full"
     >
-      <div className="border-line flex items-baseline justify-between border-b px-5 py-3">
-        <h2 id="ask-heading" className="font-serif text-lg font-semibold">
-          Ask about admission
-        </h2>
+      {/* Status line: what is answering, and what it is answering from. */}
+      <div className="border-shell-line-soft flex items-center gap-2.5 border-b px-4 py-2.5 sm:px-5">
+        <span className="relative flex size-2 shrink-0">
+          {reachable === true && (
+            <span className="bg-emerald absolute inline-flex size-full animate-ping rounded-full opacity-60" />
+          )}
+          <span
+            className={`relative inline-flex size-2 rounded-full ${
+              reachable === true
+                ? "bg-emerald"
+                : reachable === false
+                  ? "bg-rose"
+                  : "bg-shell-mute animate-pulse"
+            }`}
+          />
+        </span>
+        <span className="text-shell-ink text-[13px] font-medium">
+          {reachable === true
+            ? "Assistant online"
+            : reachable === false
+              ? "Assistant unreachable"
+              : "Connecting…"}
+        </span>
+        {health && (
+          <span className="text-shell-mute hidden font-mono text-[11px] sm:inline">
+            {health.model} · {health.documents} documents · {health.chunks}{" "}
+            passages
+          </span>
+        )}
         {!empty && (
           <button
-            onClick={reset}
-            className="text-ink-faint hover:text-ink text-xs underline underline-offset-2 transition"
+            onClick={startOver}
+            className="text-shell-mute hover:text-shell-ink ml-auto shrink-0 text-xs font-medium transition"
           >
-            Start over
+            New chat
           </button>
         )}
       </div>
 
-      <div className="max-h-[26rem] min-h-[15rem] overflow-y-auto px-5 py-5">
+      {/* Quick actions stay put, so they are still one click away mid-conversation. */}
+      <div className="no-scrollbar border-shell-line-soft flex gap-2 overflow-x-auto border-b px-4 py-2.5 sm:px-5">
+        {CHIPS.map((chip) => (
+          <button
+            key={chip}
+            onClick={() => ask(chip)}
+            disabled={streaming}
+            className="border-shell-line text-shell-mute hover:border-blue hover:text-shell-ink shrink-0 rounded-full border px-3 py-1.5 text-xs whitespace-nowrap transition disabled:opacity-40"
+          >
+            {chip}
+          </button>
+        ))}
+      </div>
+
+      <div className="scroll-thin-dark min-h-[18rem] flex-1 overflow-y-auto px-4 py-6 sm:px-5">
         {empty ? (
-          <div className="py-2">
-            <p className="text-ink-soft max-w-xl text-[15px] leading-relaxed">
-              Answers come from the official IOE notices for 2083 — the syllabus, the
-              admission booklet, quota and payment notices, and the published pass list.
-              When the notices don&apos;t cover something, this says so instead of guessing.
+          <div className="flex h-full flex-col justify-center py-6">
+            <h2 className="text-shell-ink max-w-md text-[22px] leading-snug font-semibold tracking-[-0.02em]">
+              Ask about the IOE entrance exam and admission.
+            </h2>
+            <p className="text-shell-mute mt-3 max-w-md text-sm leading-relaxed">
+              Answers are drawn from the official 2083 notices — the syllabus,
+              the admission booklet, quota and payment notices, and the
+              published pass list. When the notices don&apos;t cover something,
+              this says so rather than guessing.
             </p>
-            <p className="eyebrow mt-6 mb-2">Try asking</p>
-            <div className="flex flex-wrap gap-2">
-              {PROMPTS.map((prompt) => (
-                <button
-                  key={prompt}
-                  onClick={() => ask(prompt)}
-                  className="border-line text-ink-soft hover:border-line-strong hover:text-ink rounded-full border px-3 py-1.5 text-[13px] transition"
-                >
-                  {prompt}
-                </button>
-              ))}
-            </div>
           </div>
         ) : (
           <div className="flex flex-col gap-5">
-            {messages.map((message, i) => (
-              <div key={i}>
-                <p className="eyebrow mb-1.5">
-                  {message.role === "user" ? "You asked" : "Assistant"}
-                </p>
-                <div
-                  className={
-                    message.role === "user"
-                      ? "border-line-strong border-l-2 pl-3 text-[15px] leading-relaxed whitespace-pre-wrap"
-                      : "text-ink-soft text-[15px] leading-relaxed whitespace-pre-wrap"
-                  }
-                >
-                  {message.content ||
-                    (streaming && i === messages.length - 1 ? (
-                      <span className="text-ink-faint inline-block animate-pulse">
-                        reading the notices…
+            {messages.map((message, i) => {
+              const waiting = streaming && i === messages.length - 1;
+              if (message.role === "user") {
+                return (
+                  <div key={i} className="flex justify-end">
+                    <div className="bg-blue max-w-[85%] rounded-xl rounded-br-sm px-3.5 py-2.5 text-[14.5px] leading-relaxed text-white">
+                      {message.content}
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <div key={i} className="flex justify-start">
+                  <div className="border-shell-line text-shell-ink max-w-[92%] rounded-xl rounded-bl-sm border bg-white/[0.045] px-4 py-3 text-[14.5px] leading-relaxed backdrop-blur-sm">
+                    {message.content ? (
+                      <RichText text={message.content} caret={waiting} />
+                    ) : (
+                      <span className="text-shell-mute animate-pulse text-sm">
+                        Reading the notices…
                       </span>
-                    ) : null)}
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             <div ref={bottom} />
           </div>
         )}
 
         {error && (
-          <p className="border-crimson/30 text-crimson mt-4 rounded-sm border-l-2 bg-transparent py-1 pl-3 text-[13px]">
+          <div className="border-rose/40 text-rose mt-4 rounded-xl border bg-white/[0.03] px-3.5 py-2.5 text-[13px]">
             {error}
-          </p>
+          </div>
         )}
       </div>
 
@@ -168,22 +227,40 @@ export default function Chat() {
           event.preventDefault();
           void ask(input.trim());
         }}
-        className="border-line border-t px-5 py-4"
+        className="border-shell-line-soft bg-shell/85 sticky bottom-0 border-t px-4 py-3 backdrop-blur sm:px-5"
       >
-        <div className="flex gap-2">
+        <div className="border-shell-line focus-within:border-blue flex items-end gap-2 rounded-xl border bg-white/[0.04] px-3 py-2 transition">
           <input
             value={input}
             onChange={(event) => setInput(event.target.value)}
-            placeholder="e.g. What documents do I need for a quota application?"
+            placeholder="What documents do I need for a quota application?"
             aria-label="Your question"
-            className="border-line focus:border-sky placeholder:text-ink-faint flex-1 rounded-sm border bg-transparent px-3 py-2.5 text-[15px] outline-none transition"
+            className="text-shell-ink placeholder:text-shell-mute/70 min-w-0 flex-1 bg-transparent py-1 text-[14.5px] outline-none"
           />
           <button
             type="submit"
             disabled={streaming || !input.trim()}
-            className="bg-ink text-paper rounded-sm px-5 py-2.5 text-sm font-medium transition disabled:opacity-30"
+            aria-label="Send question"
+            className="bg-blue grid size-8 shrink-0 place-items-center rounded-lg text-white transition hover:brightness-110 disabled:opacity-30 disabled:hover:brightness-100"
           >
-            {streaming ? "…" : "Ask"}
+            {streaming ? (
+              <span className="size-3 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+            ) : (
+              <svg
+                viewBox="0 0 24 24"
+                className="size-4"
+                fill="none"
+                aria-hidden
+              >
+                <path
+                  d="M12 19V5m0 0-6 6m6-6 6 6"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            )}
           </button>
         </div>
       </form>

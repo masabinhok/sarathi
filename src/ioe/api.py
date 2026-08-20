@@ -85,7 +85,16 @@ async def _stream(message: str, thread_id: str) -> AsyncIterator[str]:
 
 @app.get("/api/health")
 async def health() -> dict:
-    return {"status": "ok", "model": TEXT_MODEL}
+    """Liveness plus the corpus size, which the UI shows so a student can see what the
+    answers are drawn from. Counts only -- no document contents, so no auth needed."""
+    chunks = await asyncio.to_thread(load_documents)
+    return {
+        "status": "ok",
+        "model": TEXT_MODEL,
+        "embedding_model": EMB_MODEL,
+        "documents": len({chunk.metadata.get("file") for chunk in chunks}),
+        "chunks": len(chunks),
+    }
 
 
 @app.post("/api/thread")

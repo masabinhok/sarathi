@@ -1,4 +1,5 @@
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+export const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export type Role = "user" | "assistant";
 
@@ -72,6 +73,13 @@ export async function fetchHistory(threadId: string): Promise<Message[]> {
   return response.json();
 }
 
+export type Health = {
+  status: string;
+  model: string;
+  embedding_model: string;
+  documents: number;
+  chunks: number;
+};
 
 export type Today = {
   ad_date: string;
@@ -93,7 +101,10 @@ export type Notice = {
 
 export type NoticeFeed = {
   updated_at: string;
-  sources: Record<string, { label: string; url: string; count: number; error: string }>;
+  sources: Record<
+    string,
+    { label: string; url: string; count: number; error: string }
+  >;
   notices: Notice[];
 };
 
@@ -121,12 +132,17 @@ async function getJSON<T>(path: string): Promise<T> {
   return response.json();
 }
 
+export const fetchHealth = () => getJSON<Health>("/api/health");
 export const fetchToday = () => getJSON<Today>("/api/today");
 export const fetchNotices = () => getJSON<NoticeFeed>("/api/notices");
 export const fetchDeadlines = () => getJSON<DeadlineFeed>("/api/deadlines");
 
 /** Admin calls carry the shared token; the caller holds it, it is never persisted here. */
-export async function adminFetch(path: string, token: string, init: RequestInit = {}) {
+export async function adminFetch(
+  path: string,
+  token: string,
+  init: RequestInit = {},
+) {
   const response = await fetch(`${API_URL}${path}`, {
     ...init,
     headers: { ...(init.headers ?? {}), "X-Admin-Token": token },

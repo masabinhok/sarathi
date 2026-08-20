@@ -1,73 +1,60 @@
 import type { Metadata } from "next";
 import {
-  IBM_Plex_Mono,
-  IBM_Plex_Sans,
   IBM_Plex_Sans_Devanagari,
-  Source_Serif_4,
+  Inter,
+  JetBrains_Mono,
 } from "next/font/google";
 import "./globals.css";
-import Masthead from "@/components/Masthead";
 
-// Plex is a technical family drawn for engineering documentation, and its Devanagari
-// companion is metrically compatible — so Nepali and English sit at equal weight in the
-// same line rather than one looking bolted on.
-const plexSans = IBM_Plex_Sans({
-  variable: "--font-plex-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
+  weight: ["400", "500", "600", "700"],
 });
 
-const plexDeva = IBM_Plex_Sans_Devanagari({
-  variable: "--font-plex-deva",
-  subsets: ["devanagari", "latin"],
-  weight: ["400", "500", "600"],
-});
-
-const plexMono = IBM_Plex_Mono({
-  variable: "--font-plex-mono",
+// Dates, source tags, form numbers, model ids: everything that is a code rather than a
+// sentence is set in mono so it is scannable and column-aligned.
+const jetbrains = JetBrains_Mono({
+  variable: "--font-jetbrains",
   subsets: ["latin"],
   weight: ["400", "500"],
 });
 
-const sourceSerif = Source_Serif_4({
-  variable: "--font-source-serif",
-  subsets: ["latin"],
-  weight: ["400", "600"],
+// Inter carries no Devanagari, and the university's own name is written in it.
+const deva = IBM_Plex_Sans_Devanagari({
+  variable: "--font-deva",
+  subsets: ["devanagari", "latin"],
+  weight: ["400", "500"],
 });
 
 export const metadata: Metadata = {
   title: "IOE Admission Assistant",
   description:
-    "Answers about the IOE BE/BArch entrance examination and admission process, from official notices.",
+    "Ask about the IOE BE/BArch entrance exam and admission process, answered from official notices, alongside a live feed of what the campuses have published.",
 };
+
+// Runs before first paint so a dark-mode visitor never sees a white flash.
+const THEME_SCRIPT = `
+try {
+  var saved = localStorage.getItem("ioe.theme");
+  var dark = saved ? saved === "dark"
+    : matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+} catch (e) {}
+`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${plexSans.variable} ${plexDeva.variable} ${plexMono.variable} ${sourceSerif.variable} h-full antialiased`}
+      data-theme="light"
+      className={`${inter.variable} ${jetbrains.variable} ${deva.variable}`}
+      suppressHydrationWarning
     >
-      <body className="bg-paper text-ink flex min-h-full flex-col">
-        <Masthead />
-        <main className="flex-1">{children}</main>
-        <footer className="border-line mt-16 border-t">
-          <div className="text-ink-faint mx-auto flex w-full max-w-6xl flex-col gap-1 px-5 py-8 text-xs sm:flex-row sm:items-center sm:justify-between">
-            <p>
-              Unofficial. Always confirm against{" "}
-              <a
-                className="decoration-line-strong hover:text-ink underline underline-offset-2"
-                href="https://entrance.ioe.edu.np"
-                target="_blank"
-                rel="noreferrer"
-              >
-                entrance.ioe.edu.np
-              </a>{" "}
-              before acting.
-            </p>
-            <p>Answers are generated and may be wrong.</p>
-          </div>
-        </footer>
-      </body>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
+      <body className="bg-feed text-ink">{children}</body>
     </html>
   );
 }

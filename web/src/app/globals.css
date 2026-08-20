@@ -1,85 +1,191 @@
 @import "tailwindcss";
 
-/* Palette drawn from the documents this app serves: stamp-ink navy from official
-   letterheads, cool bond paper, the crimson of a Nepali government seal reserved for
-   dates that have passed, and a muted gold for the seal rule itself. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* Two surfaces, one page. The left half is the conversation and stays dark in every
+   theme; the right half is the published record and stays paper-bright. `shell-*`
+   tokens belong to the dark half, plain tokens to the light one. */
 :root {
-  --paper: #f2f4f6;
-  --paper-raised: #ffffff;
-  --ink: #0f2438;
-  --ink-soft: #55677a;
-  --ink-faint: #8496a6;
-  --line: #d5dce2;
-  --line-strong: #b6c1cb;
-  --crimson: #9b2226;
-  --gold: #8a6a1c;
-  --sky: #1d5b8f;
+  --shell: #0f172a;
+  --shell-raised: #1b283f;
+  --shell-line: #24344e;
+  --shell-line-soft: #1a2739;
+  --shell-ink: #e2e8f0;
+  --shell-mute: #8ca0b8;
+
+  --feed: #f8fafc;
+  --card: #ffffff;
+  --line: #e2e8f0;
+  --line-strong: #cbd5e1;
+  --ink: #0f172a;
+  --mute: #64748b;
+  --faint: #94a3b8;
+
+  --blue: #2563eb;
+  --blue-soft: #dbeafe;
+  --emerald: #10b981;
+  --rose: #e11d48;
+
+  --ring: color-mix(in oklab, var(--blue) 55%, transparent);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #0b1725;
-    --paper-raised: #12263a;
-    --ink: #e7edf3;
-    --ink-soft: #9db0c2;
-    --ink-faint: #6b8095;
-    --line: #1e3450;
-    --line-strong: #2c4a68;
-    --crimson: #e06c70;
-    --gold: #d0a64a;
-    --sky: #6fb2e8;
-  }
+:root[data-theme="dark"] {
+  --shell: #060c16;
+  --shell-raised: #101b2c;
+  --shell-line: #1e2c42;
+  --shell-line-soft: #16223a;
+  --shell-ink: #dce5f0;
+  --shell-mute: #7f95af;
+
+  --feed: #101d31;
+  --card: #1a2942;
+  --line: #24354f;
+  --line-strong: #33486a;
+  --ink: #e6edf6;
+  --mute: #8ca3bd;
+  --faint: #6c85a3;
+
+  --blue: #4f8bf5;
+  --blue-soft: #16294a;
+  --emerald: #34d399;
+  --rose: #fb7185;
 }
 
 @theme inline {
-  --color-paper: var(--paper);
-  --color-paper-raised: var(--paper-raised);
-  --color-ink: var(--ink);
-  --color-ink-soft: var(--ink-soft);
-  --color-ink-faint: var(--ink-faint);
+  --color-shell: var(--shell);
+  --color-shell-raised: var(--shell-raised);
+  --color-shell-line: var(--shell-line);
+  --color-shell-line-soft: var(--shell-line-soft);
+  --color-shell-ink: var(--shell-ink);
+  --color-shell-mute: var(--shell-mute);
+
+  --color-feed: var(--feed);
+  --color-card: var(--card);
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
-  --color-crimson: var(--crimson);
-  --color-gold: var(--gold);
-  --color-sky: var(--sky);
-  --font-sans: var(--font-plex-sans), var(--font-plex-deva), system-ui, sans-serif;
-  --font-serif: var(--font-source-serif), Georgia, serif;
-  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+  --color-ink: var(--ink);
+  --color-mute: var(--mute);
+  --color-faint: var(--faint);
+
+  --color-blue: var(--blue);
+  --color-blue-soft: var(--blue-soft);
+  --color-emerald: var(--emerald);
+  --color-rose: var(--rose);
+
+  /* Inter carries no Devanagari; Nepali notice titles fall through to Plex Deva. */
+  --font-sans: var(--font-inter), var(--font-deva), system-ui, sans-serif;
+  --font-deva: var(--font-deva), var(--font-inter), sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+
+  --radius-card: 12px;
 }
 
 body {
-  background: var(--paper);
+  background: var(--feed);
   color: var(--ink);
   font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
 
-/* The date-pair: BS above, AD beneath a hairline. The recurring device of this design. */
-.datepair {
-  display: inline-flex;
-  flex-direction: column;
-  line-height: 1.15;
-}
-.datepair-bs {
+/* ── The ledger rail ───────────────────────────────────────────────────────────
+   Every dated thing in this app opens with the same fixed-width monospace column:
+   Bikram Sambat above, Gregorian below, split by a hairline. The width is shared,
+   so the hairlines line up down the whole feed and the two calendars read as one
+   ruled ledger rather than as a badge stuck on a card. */
+.rail {
+  width: 4.75rem;
+  flex-shrink: 0;
   font-family: var(--font-mono);
-  font-size: 0.8125rem;
-  letter-spacing: 0.01em;
-  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
 }
-.datepair-ad {
-  font-size: 0.6875rem;
-  color: var(--ink-faint);
+/* Both dates are numeric so the digits column up and the hairlines land on one line
+   across every card -- a month name would wrap and break the rule. */
+.rail-bs {
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.rail-ad {
+  margin-top: 3px;
+  padding-top: 3px;
   border-top: 1px solid var(--line);
-  padding-top: 2px;
-  margin-top: 2px;
-  letter-spacing: 0.04em;
+  font-size: 0.6875rem;
+  color: var(--faint);
+  white-space: nowrap;
+}
+/* The same rail, on the dark half. */
+.rail-dark .rail-bs {
+  color: var(--shell-ink);
+}
+.rail-dark .rail-ad {
+  border-top-color: var(--shell-line);
+  color: var(--shell-mute);
 }
 
-.eyebrow {
-  font-size: 0.6875rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
+.tag {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
   font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Focus is always visible, and always the accent — never a UA default that fights
+   whichever surface it lands on. */
+:where(a, button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -0.15em;
+  background: var(--emerald);
+  animation: blink 1.1s steps(2, start) infinite;
+}
+@keyframes blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+/* Cards arrive in a short cascade so the feed reads top-down on first paint. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.rise {
+  animation: rise 0.32s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+/* Scrollbars: present, but not a second border down the seam. */
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+.scroll-thin-dark {
+  scrollbar-width: thin;
+  scrollbar-color: var(--shell-line) transparent;
+}
+/* Chip rows swipe horizontally; a visible bar under four pills is all noise. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -87,6 +193,8 @@ body {
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

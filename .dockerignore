@@ -1,0 +1,25 @@
+.git
+.gitignore
+.venv
+.ruff_cache
+__pycache__
+*.py[oc]
+*.egg-info
+
+# Built inside the container, onto volumes.
+.chroma
+.cache
+
+# Secrets reach the container through env_file, never through a layer.
+.env
+.env.local
+
+# Untranslated source PDFs -- the indexer skips them, and docs/ is bind-mounted anyway.
+docs/downloads
+
+web/node_modules
+web/.next
+web/tsconfig.tsbuildinfo
+
+issues.md
+compose*.yaml

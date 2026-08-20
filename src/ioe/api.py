@@ -26,9 +26,19 @@ load_dotenv()
 
 app = FastAPI(title="ioe chat api")
 
+# The browser -- not the container -- is what calls this API, so the allowed origin is
+# wherever the frontend is published. Override when it is not on the default port.
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get(
+        "CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"
+    ).split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )

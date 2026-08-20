@@ -1,0 +1,31 @@
+# Overlay that runs Ollama in a container instead of using the host's.
+#   docker compose -f compose.yaml -f compose.ollama.yaml up --build
+#
+# The models (~6 GB) download into the `models` volume on first start, so expect a long
+# first run. If you already have them on the host, prefer the default compose.yaml.
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - models:/root/.ollama
+    restart: unless-stopped
+
+  # Pulls the two models, then exits. The API waits for Ollama to answer either way.
+  ollama-pull:
+    image: ollama/ollama:latest
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/sh", "-c", "ollama pull qwen2.5:7b && ollama pull bge-m3:latest"]
+    restart: "no"
+
+  api:
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+    depends_on:
+      - ollama
+
+volumes:
+  models:

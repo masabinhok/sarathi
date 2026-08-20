@@ -5,7 +5,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import MessagesState
 
 from ioe.dates import annotate_dates, today_context
-from ioe.rag import format_context, get_store, rerank
+from ioe.rag import OLLAMA_URL, format_context, get_store, rerank
 from ioe.results import lookup_context
 
 TEXT_MODEL = "qwen2.5:7b"
@@ -87,7 +87,7 @@ class ChatState(MessagesState):
     lookup: str
 
 
-model = ChatOllama(model=TEXT_MODEL)
+model = ChatOllama(model=TEXT_MODEL, base_url=OLLAMA_URL)
 
 
 def rewrite_query(state: ChatState) -> dict:

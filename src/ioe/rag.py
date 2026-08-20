@@ -1,5 +1,6 @@
 """Document loading, indexing, and retrieval over the `docs/` folder."""
 
+import os
 import re
 from pathlib import Path
 
@@ -13,7 +14,11 @@ from langchain_text_splitters import (
 )
 
 EMB_MODEL = "bge-m3:latest"
-emb_model = OllamaEmbeddings(model=EMB_MODEL)
+
+# A container's own localhost is not the host's, so where Ollama lives is configurable.
+OLLAMA_URL = os.environ.get("OLLAMA_BASE_URL") or "http://localhost:11434"
+
+emb_model = OllamaEmbeddings(model=EMB_MODEL, base_url=OLLAMA_URL)
 
 DOCS_DIR = Path(__file__).resolve().parents[2] / "docs"
 INDEX_DIR = Path(__file__).resolve().parents[2] / ".chroma"

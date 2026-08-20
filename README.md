@@ -35,6 +35,69 @@ web/                  Next.js frontend
 You need roughly **6 GB of free disk** for the two Ollama models and about **8 GB of RAM**
 to run the 7B model comfortably.
 
+Only Ollama is strictly required if you use Docker — see [Quick start with Docker](#quick-start-with-docker), which supplies Python and Node itself.
+
+## Quick start with Docker
+
+If you would rather not install Python, Node, and their dependencies, one command builds
+and runs both services:
+
+```bash
+docker compose up --build
+```
+
+The frontend lands on <http://localhost:3000> and the backend on <http://localhost:8000>.
+The first run also builds the vector index and scrapes the notice board inside the
+container, which takes a few minutes; later runs reuse both from named volumes.
+
+**Ollama stays on the host.** The compose file points the backend at your existing
+install rather than containerising it — that is where the models you already pulled live,
+and on a GPU machine it is the copy with the drivers. On Linux, Ollama listens on
+`127.0.0.1` only, which no container can reach, so bind it to all interfaces once:
+
+```bash
+sudo systemctl edit ollama
+# in the editor that opens, add:
+#   [Service]
+#   Environment="OLLAMA_HOST=0.0.0.0"
+sudo systemctl restart ollama
+```
+
+Docker Desktop on macOS and Windows needs no such change. To skip it on Linux and run
+Ollama in a container instead:
+
+```bash
+docker compose -f compose.yaml -f compose.ollama.yaml up --build
+```
+
+That variant downloads both models (~6 GB) into a volume on first start, so prefer the
+default if you already have them.
+
+### What the containers share with the host
+
+| Path      | Kind         | Why                                                      |
+| --------- | ------------ | -------------------------------------------------------- |
+| `docs/`   | bind mount   | documents uploaded through `/admin` land in the repo      |
+| `.chroma` | named volume | the vector index, rebuilt only when it is missing         |
+| `.cache`  | named volume | the scraped notice board                                  |
+| `.env`    | env file     | supplies `ADMIN_TOKEN`; absent means admin routes are 503 |
+
+Ports come from `API_PORT` and `WEB_PORT` (8000 and 3000 by default). The frontend calls
+the API from the *browser*, not from inside the network, so `NEXT_PUBLIC_API_URL` is baked
+into the image at build time — change `API_PORT` and you have to rebuild with `--build`.
+
+Useful follow-ups:
+
+```bash
+docker compose exec api ioe-index      # reindex after editing docs/
+docker compose exec api ioe-notices    # re-scrape the notice board
+docker compose logs -f api             # follow backend logs
+docker compose down                    # stop; add -v to discard index and notices too
+```
+
+The rest of this README covers running the stack directly on your machine, which is the
+better setup if you are changing the code.
+
 ## Setup
 
 ### 1. Install the prerequisites
@@ -166,6 +229,14 @@ ADMIN_TOKEN=choose-a-long-random-string
 `ADMIN_TOKEN` guards the admin endpoints (document upload, reindex, notice refresh). If
 it is unset, every admin route returns 503 — a missing token denies access rather than
 granting it, so an unconfigured deployment is never accidentally open.
+
+Two further variables matter only when the backend is not on the same host as its
+dependencies, and Docker sets both for you:
+
+| Variable          | Default                                            | Purpose                          |
+| ----------------- | -------------------------------------------------- | -------------------------------- |
+| `OLLAMA_BASE_URL` | `http://localhost:11434`                           | where Ollama is reachable        |
+| `CORS_ORIGINS`    | `http://localhost:3000,http://127.0.0.1:3000`      | browser origins allowed to call  |
 
 The frontend reads `NEXT_PUBLIC_API_URL` and falls back to `http://localhost:8000`. Set
 it in `web/.env.local` if the backend runs elsewhere.

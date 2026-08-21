@@ -3,21 +3,32 @@ export const API_URL =
 
 export type Role = "user" | "assistant";
 
+/** A document an answer was drawn from, as retrieval recorded it. */
+export type Source = {
+  title: string;
+  year: string | null;
+  url: string | null;
+  file: string;
+  sections: string[];
+};
+
 export type Message = {
   role: Role;
   content: string;
+  sources?: Source[];
 };
 
 type StreamHandlers = {
   onToken: (text: string) => void;
   onThread?: (threadId: string) => void;
+  onSources?: (sources: Source[]) => void;
   onError?: (message: string) => void;
 };
 
 /** Reads an SSE body and dispatches `event:`/`data:` pairs as they arrive. */
 async function readSSE(
   response: Response,
-  onEvent: (event: string, data: Record<string, string>) => void,
+  onEvent: (event: string, data: Record<string, unknown>) => void,
 ) {
   const reader = response.body?.getReader();
   if (!reader) throw new Error("response has no body");
@@ -61,9 +72,11 @@ export async function sendMessage(
   if (!response.ok) throw new Error(`backend returned ${response.status}`);
 
   await readSSE(response, (event, data) => {
-    if (event === "token") handlers.onToken(data.text);
-    else if (event === "start") handlers.onThread?.(data.thread_id);
-    else if (event === "error") handlers.onError?.(data.message);
+    if (event === "token") handlers.onToken(data.text as string);
+    else if (event === "start") handlers.onThread?.(data.thread_id as string);
+    else if (event === "sources")
+      handlers.onSources?.(data.sources as Source[]);
+    else if (event === "error") handlers.onError?.(data.message as string);
   });
 }
 

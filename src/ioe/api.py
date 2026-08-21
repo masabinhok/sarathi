@@ -49,9 +49,20 @@ class ChatRequest(BaseModel):
     thread_id: str | None = None
 
 
+class Source(BaseModel):
+    """A document the answer was drawn from, as retrieval recorded it."""
+
+    title: str
+    year: str | None = None
+    url: str | None = None
+    file: str
+    sections: list[str] = []
+
+
 class Message(BaseModel):
     role: str
     content: str
+    sources: list[Source] | None = None
 
 
 def _config(thread_id: str) -> dict:
@@ -60,6 +71,21 @@ def _config(thread_id: str) -> dict:
 
 def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+
+
+async def _finished_sources(thread_id: str) -> list[dict] | None:
+    """Citations for the answer just written, read back off the checkpoint.
+
+    They ride on the finished message rather than in the token stream, since retrieval
+    knows its documents before the first token and the student reads them after the last.
+    A failure here costs the citations only -- never the answer the student already has.
+    """
+    try:
+        state = await chatbot.aget_state(_config(thread_id))
+    except Exception:  # noqa: BLE001 - an uncited answer still beats a truncated stream
+        return None
+    messages = state.values.get("messages", []) if state.values else []
+    return messages[-1].additional_kwargs.get("sources") if messages else None
 
 
 async def _stream(message: str, thread_id: str) -> AsyncIterator[str]:
@@ -80,6 +106,11 @@ async def _stream(message: str, thread_id: str) -> AsyncIterator[str]:
                 yield _sse("token", {"text": text})
     except Exception as exc:  # noqa: BLE001 - any failure must reach the UI, not stall the stream
         yield _sse("error", {"message": str(exc)})
+
+    sources = await _finished_sources(thread_id)
+    if sources:
+        yield _sse("sources", {"sources": sources})
+
     yield _sse("done", {"thread_id": thread_id})
 
 
@@ -111,7 +142,13 @@ async def history(thread_id: str) -> list[Message]:
         if isinstance(msg, HumanMessage):
             out.append(Message(role="user", content=msg.content))
         elif isinstance(msg, AIMessage) and msg.content:
-            out.append(Message(role="assistant", content=msg.content))
+            out.append(
+                Message(
+                    role="assistant",
+                    content=msg.content,
+                    sources=msg.additional_kwargs.get("sources"),
+                )
+            )
     return out
 
 

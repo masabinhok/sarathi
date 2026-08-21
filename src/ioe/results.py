@@ -19,6 +19,16 @@ RESULTS_CSV = (
 )
 RESULT_YEAR = "2083"
 
+# The CSV is a transcription of the published result notice, so a lookup cites the notice
+# a student can actually open -- not a file that only exists inside this repository.
+RESULT_SOURCE = {
+    "title": "BE/BArch Entrance Examination Result 2083 - published pass list",
+    "year": RESULT_YEAR,
+    "url": "https://entrance.ioe.edu.np/Notice/Detail/5131",
+    "file": RESULTS_CSV.name,
+    "sections": [],
+}
+
 # "2083-4567" written out, or a bare number qualified by form/application/symbol wording.
 _FORM_RE = re.compile(r"\b(20\d{2})[-\s]?(\d{1,6})\b")
 _RANK_RE = re.compile(

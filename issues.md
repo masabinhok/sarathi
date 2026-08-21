@@ -19,7 +19,7 @@ If you need this information for a specific application or process, it's always 
 3. [FIXED] the ui should be more similar to government websites or ioe/tu/pcampus website, a formal educational institutioal vibe. i think the ui should be more welcoming. yeah the chabot is the main attractino but, we should display relevant notices from all sites, like tu, ioe, pcampus, other contituent campus, exam.ioe.edu.np, also think of adding other features to the app that makes it feel like a real product instead of just a ragbot. (admin side where they can upload the tranlsted docuemjtns, and it goes stays there where he can update the bot from the ui? is it possible???)
 
 4. kv cache
-5. add citations
+5. [FIXED] add citations
 6. [FIXED] support markdown formatting in answers
 7. [SATISFIED] ui rework
 8. remove unnecessary things, keep things that adds value, rethink on app's scope, extend to other campus or be limited to pulchowk, add more information to make the bot more robust

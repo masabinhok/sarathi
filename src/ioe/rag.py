@@ -108,6 +108,46 @@ def citation(doc: Document) -> str:
     return f"{label} ({year})" if year else str(label)
 
 
+# One citation per document, capped at what a student will actually click through.
+# Retrieval routinely returns several chunks of the same notice; listing each one would
+# make a four-source answer look like a six-source answer.
+MAX_SOURCES = 4
+MAX_SECTIONS = 2
+
+
+def source_payload(docs: list[Document]) -> list[dict]:
+    """Group retrieved chunks into one citation per document, in retrieval order.
+
+    The citations are built from what retrieval actually put in the prompt, not from
+    markers the model is asked to emit. A 7B model does not reliably produce those, and a
+    citation that is sometimes there is worse than none: the student cannot tell a missing
+    marker from an ungrounded answer.
+    """
+    out: dict[str, dict] = {}
+    for doc in docs:
+        meta = doc.metadata
+        file = str(meta.get("file", "source"))
+        entry = out.setdefault(
+            file,
+            {
+                "title": str(meta.get("title") or file),
+                "year": str(meta["year"]) if meta.get("year") else None,
+                "url": meta.get("url") or None,
+                "file": file,
+                "sections": [],
+            },
+        )
+        # h1 restates the document title in every one of these notices, so a citation
+        # pointing at it would add nothing the title has not already said.
+        section = meta.get("h3") or meta.get("h2")
+        if section and section not in entry["sections"]:
+            entry["sections"].append(str(section))
+
+    for entry in out.values():
+        del entry["sections"][MAX_SECTIONS:]
+    return list(out.values())[:MAX_SOURCES]
+
+
 def format_context(docs: list[Document]) -> str:
     blocks = []
     for doc in docs:

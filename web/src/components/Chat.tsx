@@ -2,7 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import Markdown from "@/components/Markdown";
-import { fetchHistory, sendMessage, type Message } from "@/lib/api";
+import Sources from "@/components/Sources";
+import {
+  fetchHistory,
+  sendMessage,
+  type Message,
+  type Source,
+} from "@/lib/api";
 
 const THREAD_KEY = "ioe.thread_id";
 
@@ -65,19 +71,22 @@ export default function Chat({ initial = "" }: { initial?: string }) {
       { role: "assistant", content: "" },
     ]);
 
-    const appendToLast = (chunk: string) =>
+    const updateLast = (change: (message: Message) => Message) =>
       setMessages((prev) => {
         const next = [...prev];
-        next[next.length - 1] = {
-          role: "assistant",
-          content: next[next.length - 1].content + chunk,
-        };
+        next[next.length - 1] = change(next[next.length - 1]);
         return next;
       });
 
     try {
       await sendMessage(text, threadId.current, {
-        onToken: appendToLast,
+        onToken: (chunk: string) =>
+          updateLast((message) => ({
+            ...message,
+            content: message.content + chunk,
+          })),
+        onSources: (sources: Source[]) =>
+          updateLast((message) => ({ ...message, sources })),
         onThread: (id) => {
           threadId.current = id;
           localStorage.setItem(THREAD_KEY, id);
@@ -161,6 +170,11 @@ export default function Chat({ initial = "" }: { initial?: string }) {
                     <p className="text-faint animate-pulse text-[0.9375rem]">
                       Reading the notices…
                     </p>
+                  )}
+                  {/* Citations arrive once the answer is complete, so they appear
+                      under a finished answer rather than above a growing one. */}
+                  {message.sources && message.sources.length > 0 && (
+                    <Sources sources={message.sources} />
                   )}
                 </div>
               );

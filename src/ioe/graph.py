@@ -5,8 +5,15 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import MessagesState
 
 from ioe.dates import annotate_dates, today_context
-from ioe.rag import OLLAMA_URL, format_context, get_store, rerank
-from ioe.results import lookup_context
+from ioe.rag import (
+    MAX_SOURCES,
+    OLLAMA_URL,
+    format_context,
+    get_store,
+    rerank,
+    source_payload,
+)
+from ioe.results import RESULT_SOURCE, lookup_context
 
 TEXT_MODEL = "qwen2.5:7b"
 
@@ -50,6 +57,10 @@ the answer describes.
 - If the documents do not cover the question, say so directly and point the student to \
 the notice feed in this app, to ioe.edu.np or entrance.ioe.edu.np, or to their campus \
 admission office. Do not fill the gap from memory.
+- Do not end your answer with a source list, a bibliography, or a "References" heading. \
+The interface prints the documents you were given underneath your answer, with links to \
+the official notices. Naming a source mid-sentence is still welcome; repeating the list \
+is not.
 
 Dates:
 - A "Today's date" block below gives the current date in both calendars. Use it rather than guessing, and never state a date you were not given.
@@ -101,6 +112,7 @@ class ChatState(MessagesState):
     query: str
     context: str
     lookup: str
+    sources: list[dict]
 
 
 model = ChatOllama(model=TEXT_MODEL, base_url=OLLAMA_URL)
@@ -141,11 +153,17 @@ def retrieve(state: ChatState) -> dict:
             state["query"], k=TOP_K * 2
         )
     except Exception:  # noqa: BLE001 - an unbuilt index must degrade to no context, not 500
-        return {"context": ""}
+        return {"context": "", "sources": []}
 
     ordered = rerank(state["query"], hits)
     kept = [doc for doc, score in ordered if score >= MIN_RELEVANCE][:TOP_K]
-    return {"context": format_context(kept) if kept else ""}
+    # Both keys are written on every path, including the empty one. State persists across
+    # turns, so a turn that retrieves nothing has to clear the previous turn's documents
+    # rather than inherit them and cite the wrong notice.
+    return {
+        "context": format_context(kept) if kept else "",
+        "sources": source_payload(kept),
+    }
 
 
 def lookup_result(state: ChatState) -> dict:
@@ -174,7 +192,24 @@ def chat_node(state: ChatState) -> dict:
         prompt.append(SystemMessage(content=f"Reference documents:\n\n{context}"))
     prompt.extend(messages)
 
-    return {"messages": model.invoke(prompt)}
+    # Citations are assembled from what retrieval actually placed in this prompt, and the
+    # pass list leads when it was consulted, since an exact record outranks a passage that
+    # merely matched. Attaching them to the message rather than to the state keeps them
+    # with the turn they belong to, so the checkpointer can replay them into /api/history.
+    sources = state.get("sources") or []
+    if state.get("lookup"):
+        # The pass list and the notice that published it are one document at one URL, so
+        # citing both would print the same notice twice. The exact record keeps the slot:
+        # it is what the answer was actually read off.
+        sources = [
+            RESULT_SOURCE,
+            *(s for s in sources if s.get("url") != RESULT_SOURCE["url"]),
+        ]
+
+    answer = model.invoke(prompt)
+    if sources:
+        answer.additional_kwargs["sources"] = sources[:MAX_SOURCES]
+    return {"messages": answer}
 
 
 graph = StateGraph(ChatState)

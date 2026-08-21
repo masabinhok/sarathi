@@ -30,6 +30,11 @@ _NOISE_RE = re.compile(
 )
 
 SNIPPET_CHARS = 220
+
+# Snippets are lifted verbatim out of Markdown documents and shown as plain text, so the
+# inline markup has to come off -- otherwise a student reads "**point 6**" on screen.
+_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]*\)")
+_EMPHASIS_RE = re.compile(r"(\*\*|__|\*|_|`)")
 WINDOW_PAST_DAYS = 45
 WINDOW_FUTURE_DAYS = 365
 
@@ -57,7 +62,9 @@ def _sentence_around(text: str, index: int) -> str:
     start = text.rfind("\n", 0, index) + 1
     end = text.find("\n", index)
     line = text[start:] if end == -1 else text[start:end]
-    snippet = re.sub(r"\s+", " ", line).strip(" *#->|")
+    snippet = _LINK_RE.sub(r"\1", line)
+    snippet = _EMPHASIS_RE.sub("", snippet)
+    snippet = re.sub(r"\s+", " ", snippet).strip(" #->|")
     if len(snippet) > SNIPPET_CHARS:
         snippet = snippet[:SNIPPET_CHARS].rsplit(" ", 1)[0] + "..."
     return snippet

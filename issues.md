@@ -20,5 +20,9 @@ If you need this information for a specific application or process, it's always 
 
 4. kv cache
 5. add citations
-6. support markdown formatting in answers
-7. ui rework
+6. [FIXED] support markdown formatting in answers
+7. [SATISFIED] ui rework
+8. remove unnecessary things, keep things that adds value, rethink on app's scope, extend to other campus or be limited to pulchowk, add more information to make the bot more robust
+9. Guide the bot to answer smartly to answers
+10. play around with the bot for flaws and fix it.
+11. add a chat history on the left sidebar, make all three divs seperatly scrollabale, chat, notices and chat-history !

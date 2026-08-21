@@ -30,8 +30,15 @@ export default function Header() {
           className="size-[30px] shrink-0"
         />
         <span className="min-w-0 leading-tight">
-          <span className="text-shell-ink group-hover:text-blue block truncate text-[15px] font-semibold tracking-[-0.01em] transition">
-            IOE Admission Assistant
+          {/* The name carries the descriptor beside it: "Sarathi" alone tells a
+              first-time visitor nothing about what they have landed on. */}
+          <span className="block truncate text-[15px] tracking-[-0.01em]">
+            <span className="text-shell-ink group-hover:text-blue font-semibold transition">
+              Sarathi
+            </span>
+            <span className="text-shell-mute hidden sm:inline">
+              {" \u00b7 IOE Entrance and Admission Assistant"}
+            </span>
           </span>
           <span className="text-shell-mute font-deva hidden truncate text-[11px] sm:block">
             त्रिभुवन विश्वविद्यालय · इन्जिनियरिङ अध्ययन संस्थान

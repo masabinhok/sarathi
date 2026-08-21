@@ -1,4 +1,6 @@
-# IOE Admission Assistant
+# Sarathi
+
+**सारथी** — the one who steers you where you are going.
 
 A retrieval-backed assistant for students applying to the Institute of Engineering (IOE),
 Tribhuvan University, Nepal. It answers questions about the BE/BArch entrance examination

@@ -28,7 +28,7 @@ const deva = IBM_Plex_Sans_Devanagari({
 });
 
 export const metadata: Metadata = {
-  title: "IOE Admission Assistant",
+  title: "Sarathi — IOE Entrance and Admission Assistant",
   description:
     "Ask about the IOE BE/BArch entrance exam and admission process, answered from official notices, alongside a live feed of what the campuses have published.",
 };

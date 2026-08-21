@@ -24,7 +24,7 @@ from ioe.rag import DOCS_DIR, EMB_MODEL, build_index, load_documents
 # rather than the shell that happens to launch uvicorn.
 load_dotenv()
 
-app = FastAPI(title="ioe chat api")
+app = FastAPI(title="sarathi api")
 
 # The browser -- not the container -- is what calls this API, so the allowed origin is
 # wherever the frontend is published. Override when it is not on the default port.

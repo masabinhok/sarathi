@@ -23,7 +23,7 @@ emb_model = OllamaEmbeddings(model=EMB_MODEL, base_url=OLLAMA_URL)
 DOCS_DIR = Path(__file__).resolve().parents[2] / "docs"
 INDEX_DIR = Path(__file__).resolve().parents[2] / ".chroma"
 COLLECTION = "ioe_docs"
-SKIP_DIRS = {"downloads", "data"}
+SKIP_DIRS = {"downloads", "data", "engineering"}
 
 # Sections longer than this are split again; overlap keeps a split table or list readable.
 MAX_CHUNK = 1200
@@ -55,7 +55,8 @@ def load_documents() -> list[Document]:
     for path in sorted(DOCS_DIR.rglob("*.md")):
         if path.name.startswith("_") or path.name == "README.md":
             continue
-        # downloads/ holds the untranslated source PDFs; data/ holds lookup tables.
+        # downloads/ holds the untranslated source PDFs; data/ holds lookup tables;
+        # engineering/ is documentation about this software, not about admissions.
         if any(part in SKIP_DIRS for part in path.relative_to(DOCS_DIR).parts[:-1]):
             continue
 

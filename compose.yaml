@@ -4,7 +4,7 @@
 # and on a GPU box it is the copy with the drivers. To run it in a container instead:
 #   docker compose -f compose.yaml -f compose.ollama.yaml up --build
 
-name: ioe
+name: sarathi
 
 services:
   api:

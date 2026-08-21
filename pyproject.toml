@@ -1,7 +1,7 @@
 [project]
 name = "ioe"
 version = "0.1.0"
-description = "Add your description here"
+description = "Sarathi -- an IOE entrance and admission assistant"
 readme = "README.md"
 authors = [
     { name = "Sabin Shrestha", email = "sabin.shrestha.er@gmail.com" }

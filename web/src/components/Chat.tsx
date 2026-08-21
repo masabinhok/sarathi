@@ -1,14 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import RichText from "@/components/RichText";
-import {
-  fetchHealth,
-  fetchHistory,
-  sendMessage,
-  type Health,
-  type Message,
-} from "@/lib/api";
+import Markdown from "@/components/Markdown";
+import { fetchHistory, sendMessage, type Message } from "@/lib/api";
 
 const THREAD_KEY = "ioe.thread_id";
 
@@ -18,30 +12,28 @@ const CHIPS = [
   "What's on the entrance syllabus?",
   "Did form 2083-4001 pass?",
   "Has the quota deadline passed?",
-  "Pay the fee with eSewa",
+  "How do I pay the fee with eSewa?",
 ];
 
-export default function Chat() {
+export default function Chat({ initial = "" }: { initial?: string }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [health, setHealth] = useState<Health | null>(null);
-  // Distinguishes "not asked yet" from "asked and it is down", so the status line
-  // never claims the assistant is offline before the first request has returned.
-  const [reachable, setReachable] = useState<boolean | null>(null);
   const threadId = useRef<string | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
+  // A question handed over from the landing page must be asked exactly once, even
+  // though effects run twice in development.
+  const handedOver = useRef(false);
 
   useEffect(() => {
     let live = true;
-    fetchHealth()
-      .then((value) => {
-        if (!live) return;
-        setHealth(value);
-        setReachable(value.status === "ok");
-      })
-      .catch(() => live && setReachable(false));
+
+    if (initial && !handedOver.current) {
+      handedOver.current = true;
+      void ask(initial);
+      return;
+    }
 
     // Restore the previous conversation so a refresh doesn't lose the thread.
     const saved = localStorage.getItem(THREAD_KEY);
@@ -54,7 +46,8 @@ export default function Chat() {
     return () => {
       live = false;
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initial]);
 
   useEffect(() => {
     if (messages.length) bottom.current?.scrollIntoView({ behavior: "smooth" });
@@ -94,7 +87,7 @@ export default function Chat() {
     } catch (err) {
       setError(
         err instanceof Error && err.message.includes("fetch")
-          ? "Can't reach the assistant. Check that the backend is running on port 8000."
+          ? "Can't reach the assistant right now. It may still be starting up."
           : err instanceof Error
             ? err.message
             : "The request failed.",
@@ -114,100 +107,61 @@ export default function Chat() {
   const empty = messages.length === 0;
 
   return (
-    <section
-      aria-label="Ask the assistant"
-      className="bg-shell flex min-h-0 min-w-0 flex-col lg:h-full"
-    >
-      {/* Status line: what is answering, and what it is answering from. */}
-      <div className="border-shell-line-soft flex items-center gap-2.5 border-b px-4 py-2.5 sm:px-5">
-        <span className="relative flex size-2 shrink-0">
-          {reachable === true && (
-            <span className="bg-emerald absolute inline-flex size-full animate-ping rounded-full opacity-60" />
-          )}
-          <span
-            className={`relative inline-flex size-2 rounded-full ${
-              reachable === true
-                ? "bg-emerald"
-                : reachable === false
-                  ? "bg-rose"
-                  : "bg-shell-mute animate-pulse"
-            }`}
-          />
-        </span>
-        <span className="text-shell-ink text-[13px] font-medium">
-          {reachable === true
-            ? "Assistant online"
-            : reachable === false
-              ? "Assistant unreachable"
-              : "Connecting…"}
-        </span>
-        {health && (
-          <span className="text-shell-mute hidden font-mono text-[11px] sm:inline">
-            {health.model} · {health.documents} documents · {health.chunks}{" "}
-            passages
-          </span>
-        )}
-        {!empty && (
-          <button
-            onClick={startOver}
-            className="text-shell-mute hover:text-shell-ink ml-auto shrink-0 text-xs font-medium transition"
-          >
-            New chat
-          </button>
-        )}
-      </div>
-
-      {/* Quick actions stay put, so they are still one click away mid-conversation. */}
-      <div className="no-scrollbar border-shell-line-soft flex gap-2 overflow-x-auto border-b px-4 py-2.5 sm:px-5">
-        {CHIPS.map((chip) => (
-          <button
-            key={chip}
-            onClick={() => ask(chip)}
-            disabled={streaming}
-            className="border-shell-line text-shell-mute hover:border-blue hover:text-shell-ink shrink-0 rounded-full border px-3 py-1.5 text-xs whitespace-nowrap transition disabled:opacity-40"
-          >
-            {chip}
-          </button>
-        ))}
-      </div>
-
-      <div className="scroll-thin-dark min-h-[18rem] flex-1 overflow-y-auto px-4 py-6 sm:px-5">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      {/* Only a conversation in progress stretches to fill the column; an empty
+          one would otherwise open with the composer stranded at the bottom. */}
+      <div className={`pt-10 pb-6 ${empty ? "" : "flex-1"}`}>
         {empty ? (
-          <div className="flex h-full flex-col justify-center py-6">
-            <h2 className="text-shell-ink max-w-md text-[22px] leading-snug font-semibold tracking-[-0.02em]">
+          <div className="max-w-lg">
+            <h1 className="font-display text-[2rem] leading-[1.15] font-medium tracking-[-0.02em]">
               Ask about the IOE entrance exam and admission.
-            </h2>
-            <p className="text-shell-mute mt-3 max-w-md text-sm leading-relaxed">
-              Answers are drawn from the official 2083 notices — the syllabus,
-              the admission booklet, quota and payment notices, and the
-              published pass list. When the notices don&apos;t cover something,
-              this says so rather than guessing.
+            </h1>
+            <p className="text-mute mt-4 text-[0.9375rem] leading-relaxed">
+              Answers come from the official 2083 notices — the syllabus, the
+              admission booklet, the quota and payment notices, and the
+              published pass list. Dates are given in both calendars. When the
+              notices don&apos;t cover something, this says so instead of
+              guessing.
             </p>
+            <ul className="mt-7 space-y-px">
+              {CHIPS.map((chip) => (
+                <li key={chip} className="border-rule border-b first:border-t">
+                  <button
+                    onClick={() => ask(chip)}
+                    className="group text-mute hover:text-ink flex w-full items-center gap-3 py-3 text-left text-[0.9375rem] transition"
+                  >
+                    <span className="flex-1">{chip}</span>
+                    <span className="text-faint group-hover:text-ink transition">
+                      →
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
         ) : (
-          <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-8">
             {messages.map((message, i) => {
               const waiting = streaming && i === messages.length - 1;
               if (message.role === "user") {
                 return (
-                  <div key={i} className="flex justify-end">
-                    <div className="bg-blue max-w-[85%] rounded-xl rounded-br-sm px-3.5 py-2.5 text-[14.5px] leading-relaxed text-white">
+                  <div key={i}>
+                    <p className="eyebrow mb-2">You asked</p>
+                    <p className="font-display text-[1.25rem] leading-snug font-medium">
                       {message.content}
-                    </div>
+                    </p>
                   </div>
                 );
               }
               return (
-                <div key={i} className="flex justify-start">
-                  <div className="border-shell-line text-shell-ink max-w-[92%] rounded-xl rounded-bl-sm border bg-white/[0.045] px-4 py-3 text-[14.5px] leading-relaxed backdrop-blur-sm">
-                    {message.content ? (
-                      <RichText text={message.content} caret={waiting} />
-                    ) : (
-                      <span className="text-shell-mute animate-pulse text-sm">
-                        Reading the notices…
-                      </span>
-                    )}
-                  </div>
+                <div key={i} className="border-rule border-t pt-5">
+                  {message.content ? (
+                    <Markdown text={message.content} streaming={waiting} />
+                  ) : (
+                    <p className="text-faint animate-pulse text-[0.9375rem]">
+                      Reading the notices…
+                    </p>
+                  )}
                 </div>
               );
             })}
@@ -216,9 +170,9 @@ export default function Chat() {
         )}
 
         {error && (
-          <div className="border-rose/40 text-rose mt-4 rounded-xl border bg-white/[0.03] px-3.5 py-2.5 text-[13px]">
+          <p className="border-crimson text-crimson mt-6 border-l-2 pl-3 text-[0.875rem]">
             {error}
-          </div>
+          </p>
         )}
       </div>
 
@@ -227,24 +181,24 @@ export default function Chat() {
           event.preventDefault();
           void ask(input.trim());
         }}
-        className="border-shell-line-soft bg-shell/85 sticky bottom-0 border-t px-4 py-3 backdrop-blur sm:px-5"
+        className="bg-paper/90 sticky bottom-0 pt-3 pb-6 backdrop-blur"
       >
-        <div className="border-shell-line focus-within:border-blue flex items-end gap-2 rounded-xl border bg-white/[0.04] px-3 py-2 transition">
+        <div className="border-rule-strong focus-within:border-ink bg-card flex items-center gap-2 rounded-[10px] border px-3.5 py-2.5 transition">
           <input
             value={input}
             onChange={(event) => setInput(event.target.value)}
             placeholder="What documents do I need for a quota application?"
             aria-label="Your question"
-            className="text-shell-ink placeholder:text-shell-mute/70 min-w-0 flex-1 bg-transparent py-1 text-[14.5px] outline-none"
+            className="field text-ink placeholder:text-faint min-w-0 flex-1 bg-transparent text-[0.9375rem] outline-none"
           />
           <button
             type="submit"
             disabled={streaming || !input.trim()}
-            aria-label="Send question"
-            className="bg-blue grid size-8 shrink-0 place-items-center rounded-lg text-white transition hover:brightness-110 disabled:opacity-30 disabled:hover:brightness-100"
+            aria-label="Ask"
+            className="bg-ink text-paper grid size-8 shrink-0 place-items-center rounded-[7px] transition disabled:opacity-25"
           >
             {streaming ? (
-              <span className="size-3 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+              <span className="border-paper/40 border-t-paper size-3 animate-spin rounded-full border-2" />
             ) : (
               <svg
                 viewBox="0 0 24 24"
@@ -253,9 +207,9 @@ export default function Chat() {
                 aria-hidden
               >
                 <path
-                  d="M12 19V5m0 0-6 6m6-6 6 6"
+                  d="M5 12h13m0 0-5-5m5 5-5 5"
                   stroke="currentColor"
-                  strokeWidth="2"
+                  strokeWidth="1.8"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
@@ -263,7 +217,16 @@ export default function Chat() {
             )}
           </button>
         </div>
+        {!empty && (
+          <button
+            onClick={startOver}
+            type="button"
+            className="text-faint hover:text-ink mt-2.5 text-[0.75rem] transition"
+          >
+            Start a new conversation
+          </button>
+        )}
       </form>
-    </section>
+    </div>
   );
 }

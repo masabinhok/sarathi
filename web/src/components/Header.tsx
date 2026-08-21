@@ -1,11 +1,24 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import Dateline from "@/components/Dateline";
 import ThemeToggle from "@/components/ThemeToggle";
+import Wordmark from "@/components/Wordmark";
 import { fetchToday, type Today } from "@/lib/api";
 
+const NAV = [
+  { href: "/ask", label: "Ask" },
+  { href: "/notices", label: "Notices" },
+  { href: "/about", label: "About" },
+];
+
+/** Masthead: name, where you can go, and what day it is. The crest, the descriptor and
+ *  the Devanagari subline moved to the landing page and the footer, where there is room
+ *  to actually read them. */
 export default function Header() {
+  const pathname = usePathname();
   const [today, setToday] = useState<Today | null>(null);
 
   useEffect(() => {
@@ -19,49 +32,41 @@ export default function Header() {
   }, []);
 
   return (
-    <header className="bg-shell border-shell-line flex h-14 shrink-0 items-center gap-4 border-b px-4 sm:px-5">
-      <Link href="/" className="group flex min-w-0 items-center gap-3">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/tu-crest.svg"
-          alt="Tribhuvan University"
-          width={30}
-          height={30}
-          className="size-[30px] shrink-0"
-        />
-        <span className="min-w-0 leading-tight">
-          {/* The name carries the descriptor beside it: "Sarathi" alone tells a
-              first-time visitor nothing about what they have landed on. */}
-          <span className="block truncate text-[15px] tracking-[-0.01em]">
-            <span className="text-shell-ink group-hover:text-blue font-semibold transition">
-              Sarathi
-            </span>
-            <span className="text-shell-mute hidden sm:inline">
-              {" \u00b7 IOE Entrance and Admission Assistant"}
-            </span>
-          </span>
-          <span className="text-shell-mute font-deva hidden truncate text-[11px] sm:block">
-            त्रिभुवन विश्वविद्यालय · इन्जिनियरिङ अध्ययन संस्थान
-          </span>
-        </span>
-      </Link>
+    <header className="border-rule bg-paper/90 sticky top-0 z-20 border-b backdrop-blur">
+      <div className="mx-auto flex h-14 max-w-[80rem] items-center gap-6 px-5 sm:px-8">
+        <Wordmark />
 
-      <div className="ml-auto flex items-center gap-3 sm:gap-4">
-        {/* The rail motif, laid on its side to fit the bar. */}
-        {today && (
-          <div className="border-shell-line hidden items-center gap-2.5 rounded-lg border px-2.5 py-1 font-mono text-[11px] md:flex">
-            <span className="text-shell-ink">{today.bs_label}</span>
-            <span className="bg-shell-line h-3.5 w-px" />
-            <span className="text-shell-mute">{today.ad_date}</span>
-          </div>
-        )}
-        <ThemeToggle />
-        <Link
-          href="/admin"
-          className="border-shell-line text-shell-mute hover:border-blue hover:text-blue rounded-lg border px-2.5 py-1.5 text-xs font-medium transition"
-        >
-          Admin
-        </Link>
+        <nav className="flex items-center gap-5 text-[0.8125rem] font-medium">
+          {NAV.map(({ href, label }) => {
+            const active = pathname === href;
+            return (
+              <Link
+                key={href}
+                href={href}
+                aria-current={active ? "page" : undefined}
+                className={
+                  active
+                    ? "text-ink border-ink border-b pb-0.5"
+                    : "text-mute hover:text-ink border-b border-transparent pb-0.5 transition"
+                }
+              >
+                {label}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="ml-auto flex items-center gap-4">
+          {/* The masthead scale of the dateline. */}
+          {today && (
+            <Dateline
+              bs={today.bs_date}
+              ad={today.ad_date}
+              className="hidden sm:block"
+            />
+          )}
+          <ThemeToggle />
+        </div>
       </div>
     </header>
   );

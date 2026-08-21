@@ -40,7 +40,7 @@ export default function ThemeToggle() {
       onClick={toggle}
       aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}
       title={dark ? "Light theme" : "Dark theme"}
-      className="text-shell-mute hover:border-shell-line hover:text-shell-ink grid size-8 place-items-center rounded-lg border border-transparent transition"
+      className="text-mute hover:border-rule hover:text-ink grid size-8 place-items-center rounded-[10px] border border-transparent transition"
     >
       {dark ? (
         <svg viewBox="0 0 24 24" className="size-4" fill="none" aria-hidden>

@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import DateStamp from "@/components/DateStamp";
-import Skeleton from "@/components/Skeleton";
+import Dateline from "@/components/Dateline";
 import { fetchDeadlines, type Deadline, type DeadlineFeed } from "@/lib/api";
 
 function offset(days: number) {
@@ -11,40 +10,32 @@ function offset(days: number) {
   return days === -1 ? "yesterday" : `${Math.abs(days)} days ago`;
 }
 
-function Row({ item, index }: { item: Deadline; index: number }) {
+function Row({ item }: { item: Deadline }) {
   const passed = item.status === "passed";
   return (
-    <li
-      className="rise"
-      style={{ animationDelay: `${Math.min(index, 14) * 20}ms` }}
-    >
-      <div className="border-line bg-card rounded-xl border p-3">
-        <div className="flex gap-3.5">
-          <DateStamp bs={item.bs_date} ad={item.ad_date} />
-          <div className="min-w-0 flex-1">
-            <span
-              className={`tag ${passed ? "bg-rose/12 text-rose" : "bg-emerald/12 text-emerald"}`}
-            >
-              {offset(item.days)}
-            </span>
-            <p className="mt-1.5 text-[13.5px] leading-snug">{item.snippet}</p>
-            <p className="text-faint mt-1.5 font-mono text-[11px]">
-              {item.url ? (
-                <a
-                  href={item.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="hover:text-blue underline underline-offset-2 transition"
-                >
-                  {item.document}
-                </a>
-              ) : (
-                item.document
-              )}
-            </p>
-          </div>
-        </div>
-      </div>
+    <li className="border-rule border-b py-4">
+      <Dateline bs={item.bs_date} ad={item.ad_date} />
+      {/* The one place colour is allowed: a date that has already gone. */}
+      <p
+        className={`mt-2 font-mono text-[0.6875rem] ${passed ? "text-crimson" : "text-mute"}`}
+      >
+        {offset(item.days)}
+      </p>
+      <p className="mt-1.5 text-[0.875rem] leading-snug">{item.snippet}</p>
+      <p className="text-faint mt-1.5 text-[0.6875rem]">
+        {item.url ? (
+          <a
+            href={item.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="decoration-rule-strong hover:decoration-current underline underline-offset-2"
+          >
+            {item.document}
+          </a>
+        ) : (
+          item.document
+        )}
+      </p>
     </li>
   );
 }
@@ -63,58 +54,46 @@ export default function Deadlines() {
     };
   }, []);
 
-  if (failed) {
-    return (
-      <p className="border-line text-mute rounded-xl border border-dashed p-4 text-sm">
-        Could not read the calendar. Check that the backend is running.
-      </p>
-    );
-  }
-
-  if (!feed) return <Skeleton rows={3} />;
+  if (failed) return null;
 
   const upcoming = feed?.upcoming ?? [];
   const passed = feed?.passed ?? [];
 
   return (
-    <div className="flex flex-col gap-5">
-      <section>
-        <h3 className="text-mute mb-2 text-xs font-semibold">Still ahead</h3>
-        {upcoming.length > 0 ? (
-          <ul className="flex flex-col gap-2">
-            {upcoming.map((item, i) => (
-              <Row key={`${item.file}-${item.bs_date}`} item={item} index={i} />
-            ))}
-          </ul>
-        ) : (
-          <p className="border-line text-mute rounded-xl border border-dashed p-3.5 text-[13px] leading-relaxed">
-            Every dated obligation in the indexed notices has passed. Dates for
-            the next stage go up on{" "}
-            <a
-              href="https://admission.ioe.edu.np"
-              target="_blank"
-              rel="noreferrer"
-              className="text-blue underline underline-offset-2"
-            >
-              admission.ioe.edu.np
-            </a>{" "}
-            as each phase opens.
-          </p>
-        )}
-      </section>
+    <section aria-label="Key dates" className="text-[0.8125rem]">
+      <h2 className="eyebrow border-ink border-b pb-2">Key dates</h2>
 
-      {passed.length > 0 && (
-        <section>
-          <h3 className="text-mute mb-2 text-xs font-semibold">
-            Already passed
-          </h3>
-          <ul className="flex flex-col gap-2">
-            {passed.slice(0, 8).map((item, i) => (
-              <Row key={`${item.file}-${item.bs_date}`} item={item} index={i} />
-            ))}
-          </ul>
-        </section>
+      {!feed ? (
+        <p className="text-faint py-4 text-[0.75rem]">Loading…</p>
+      ) : (
+        <>
+          {upcoming.length > 0 ? (
+            <ul>
+              {upcoming.map((item) => (
+                <Row key={`${item.file}-${item.bs_date}`} item={item} />
+              ))}
+            </ul>
+          ) : (
+            <p className="text-mute py-4 text-[0.8125rem] leading-relaxed">
+              Every dated obligation in the indexed notices has passed. Dates
+              for the next stage are published as each phase opens.
+            </p>
+          )}
+
+          {passed.length > 0 && (
+            <>
+              <h3 className="eyebrow border-rule mt-8 border-b pb-2">
+                Already passed
+              </h3>
+              <ul>
+                {passed.slice(0, 6).map((item) => (
+                  <Row key={`${item.file}-${item.bs_date}`} item={item} />
+                ))}
+              </ul>
+            </>
+          )}
+        </>
       )}
-    </div>
+    </section>
   );
 }

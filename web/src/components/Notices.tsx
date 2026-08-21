@@ -1,20 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import DateStamp from "@/components/DateStamp";
+import Dateline from "@/components/Dateline";
 import Skeleton from "@/components/Skeleton";
 import { fetchNotices, type NoticeFeed } from "@/lib/api";
 
 const SOURCE_ORDER = ["entrance", "ioe", "tu", "pcampus"];
-const FRESH_DAYS = 7;
 
-function daysSince(iso: string) {
-  if (!iso) return Infinity;
-  const then = Date.parse(iso);
-  if (Number.isNaN(then)) return Infinity;
-  return Math.floor((Date.now() - then) / 86_400_000);
-}
-
+/** The full notice index: everything the four sites have published, newest first.
+ *  Search and source filtering live here rather than in the rail, because this is the
+ *  page somebody hunting for a particular notice actually opens. */
 export default function Notices() {
   const [feed, setFeed] = useState<NoticeFeed | null>(null);
   const [failed, setFailed] = useState(false);
@@ -31,7 +26,6 @@ export default function Notices() {
     };
   }, []);
 
-  const loading = feed === null && !failed;
   const notices = useMemo(() => feed?.notices ?? [], [feed]);
   const sources = SOURCE_ORDER.filter((key) =>
     notices.some((n) => n.source === key),
@@ -46,140 +40,89 @@ export default function Notices() {
     );
   }, [notices, source, query]);
 
+  if (failed) {
+    return (
+      <p className="border-rule text-mute border border-dashed p-4 text-[0.875rem]">
+        Could not read the notice index. The assistant may still be starting up.
+      </p>
+    );
+  }
+
   return (
-    <div className="flex flex-col gap-3">
-      <div className="relative">
-        <svg
-          viewBox="0 0 24 24"
-          className="text-faint pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
-          fill="none"
-          aria-hidden
-        >
-          <circle
-            cx="11"
-            cy="11"
-            r="6.5"
-            stroke="currentColor"
-            strokeWidth="1.7"
-          />
-          <path
-            d="m16 16 4 4"
-            stroke="currentColor"
-            strokeWidth="1.7"
-            strokeLinecap="round"
-          />
-        </svg>
+    <div>
+      <div className="border-rule flex flex-wrap items-center gap-x-5 gap-y-3 border-b pb-3">
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search notices"
           aria-label="Search notices"
-          className="border-line bg-card focus:border-blue placeholder:text-faint w-full rounded-xl border py-2 pr-3 pl-9 text-[13.5px] outline-none transition"
+          type="search"
+          className="text-ink placeholder:text-faint min-w-0 flex-1 bg-transparent text-[0.9375rem] outline-none"
         />
+        {/* A flex item defaults to min-width:auto, so without min-w-0 the filter
+            row would widen the page instead of scrolling inside itself. */}
+        {sources.length > 1 && (
+          <div className="no-scrollbar flex w-full min-w-0 gap-4 overflow-x-auto text-[0.75rem] sm:w-auto">
+            {["all", ...sources].map((key) => {
+              const label =
+                key === "all" ? "All" : (feed?.sources[key]?.label ?? key);
+              const active = source === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setSource(key)}
+                  aria-pressed={active}
+                  className={`shrink-0 whitespace-nowrap transition ${
+                    active
+                      ? "text-ink border-ink border-b"
+                      : "text-mute hover:text-ink border-b border-transparent"
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {!loading && sources.length > 1 && (
-        <div className="no-scrollbar flex gap-1.5 overflow-x-auto pb-0.5">
-          {["all", ...sources].map((key) => {
-            const label =
-              key === "all" ? "All" : (feed?.sources[key]?.label ?? key);
-            const active = source === key;
-            return (
-              <button
-                key={key}
-                onClick={() => setSource(key)}
-                className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium whitespace-nowrap transition ${
-                  active
-                    ? "border-blue bg-blue text-white"
-                    : "border-line text-mute hover:border-line-strong hover:text-ink"
-                }`}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {failed && (
-        <p className="border-line text-mute rounded-xl border border-dashed p-4 text-sm">
-          The notice cache could not be read. Start the backend, then run{" "}
-          <code className="font-mono text-xs">uv run ioe-notices</code>.
+      {!feed ? (
+        <Skeleton rows={6} />
+      ) : shown.length === 0 ? (
+        <p className="text-mute py-10 text-[0.9375rem]">
+          {notices.length === 0
+            ? "No notices collected yet. An administrator refreshes these from the IOE, TU and campus sites."
+            : "No notice matches that search."}
         </p>
-      )}
-
-      {loading && <Skeleton />}
-
-      {!failed && !loading && notices.length === 0 && (
-        <p className="border-line text-mute rounded-xl border border-dashed p-4 text-sm">
-          No notices collected yet. Run{" "}
-          <code className="font-mono text-xs">uv run ioe-notices</code> to fetch
-          them.
-        </p>
-      )}
-
-      {!failed && notices.length > 0 && shown.length === 0 && (
-        <p className="border-line text-mute rounded-xl border border-dashed p-4 text-sm">
-          Nothing matches “{query}”. Try a shorter word, or clear the source
-          filter.
-        </p>
-      )}
-
-      <ul className="flex flex-col gap-2">
-        {shown.map((notice, i) => {
-          const fresh = daysSince(notice.date) <= FRESH_DAYS;
-          return (
-            <li
-              key={notice.url}
-              className="rise"
-              style={{ animationDelay: `${Math.min(i, 14) * 20}ms` }}
-            >
+      ) : (
+        <ul>
+          {shown.map((notice, i) => (
+            <li key={notice.url} className="border-rule border-b">
               <a
                 href={notice.url}
                 target="_blank"
-                rel="noreferrer"
-                className="border-line bg-card hover:border-blue/50 group flex gap-3.5 rounded-xl border p-3 transition hover:shadow-[0_2px_10px_rgba(15,23,42,0.06)]"
+                rel="noreferrer noopener"
+                className="rise group flex gap-5 py-5"
+                style={{ animationDelay: `${Math.min(i, 12) * 25}ms` }}
               >
-                <DateStamp bs={notice.bs_date} ad={notice.date} />
+                <Dateline
+                  bs={notice.bs_date}
+                  ad={notice.date}
+                  className="mt-1"
+                />
                 <div className="min-w-0 flex-1">
-                  <div className="mb-1.5 flex items-center gap-1.5">
-                    <span className="tag bg-line/70 text-mute">
-                      {notice.source_label}
-                    </span>
-                    {/* Recency is a dot, not a second label: the feed is already sorted
-                        newest first, so the source tag is the only word worth reading. */}
-                    {fresh && (
-                      <span
-                        role="img"
-                        aria-label={`Published in the last ${FRESH_DAYS} days`}
-                        title={`Published in the last ${FRESH_DAYS} days`}
-                        className="bg-emerald size-1.5 rounded-full"
-                      />
-                    )}
-                  </div>
-                  <p className="group-hover:text-blue text-[13.5px] leading-snug transition">
+                  <h2 className="font-display group-hover:decoration-rule-strong text-[1.0625rem] leading-snug font-medium underline decoration-transparent underline-offset-[3px] transition">
                     {notice.title}
+                  </h2>
+                  <p className="text-faint mt-1.5 text-[0.75rem]">
+                    {notice.source_label}
                   </p>
                 </div>
-                <svg
-                  viewBox="0 0 24 24"
-                  className="text-faint group-hover:text-blue mt-0.5 size-3.5 shrink-0 opacity-0 transition group-hover:opacity-100"
-                  fill="none"
-                  aria-hidden
-                >
-                  <path
-                    d="M7 17 17 7m0 0H8m9 0v9"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
               </a>
             </li>
-          );
-        })}
-      </ul>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

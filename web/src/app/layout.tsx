@@ -1,18 +1,27 @@
 import type { Metadata } from "next";
 import {
+  DM_Sans,
   IBM_Plex_Sans_Devanagari,
-  Inter,
   JetBrains_Mono,
+  Newsreader,
 } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-inter",
+// Display face. Newsreader was drawn for news screens, which is what the notices
+// half of this product is; used for the wordmark, headlines, and nothing smaller.
+const newsreader = Newsreader({
+  variable: "--font-newsreader",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "500"],
 });
 
-// Dates, source tags, form numbers, model ids: everything that is a code rather than a
+const dmSans = DM_Sans({
+  variable: "--font-dmsans",
+  subsets: ["latin"],
+  weight: ["400", "500", "700"],
+});
+
+// Dates, source labels, form numbers: everything that is a code rather than a
 // sentence is set in mono so it is scannable and column-aligned.
 const jetbrains = JetBrains_Mono({
   variable: "--font-jetbrains",
@@ -20,7 +29,7 @@ const jetbrains = JetBrains_Mono({
   weight: ["400", "500"],
 });
 
-// Inter carries no Devanagari, and the university's own name is written in it.
+// DM Sans carries no Devanagari, and the university's own name is written in it.
 const deva = IBM_Plex_Sans_Devanagari({
   variable: "--font-deva",
   subsets: ["devanagari", "latin"],
@@ -30,7 +39,7 @@ const deva = IBM_Plex_Sans_Devanagari({
 export const metadata: Metadata = {
   title: "Sarathi — IOE Entrance and Admission Assistant",
   description:
-    "Ask about the IOE BE/BArch entrance exam and admission process, answered from official notices, alongside a live feed of what the campuses have published.",
+    "Ask about the IOE BE/BArch entrance exam and admission, answered from official notices with every date in both Bikram Sambat and Gregorian.",
 };
 
 // Runs before first paint so a dark-mode visitor never sees a white flash.
@@ -48,13 +57,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       data-theme="light"
-      className={`${inter.variable} ${jetbrains.variable} ${deva.variable}`}
+      className={`${newsreader.variable} ${dmSans.variable} ${jetbrains.variable} ${deva.variable}`}
       suppressHydrationWarning
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
-      <body className="bg-feed text-ink">{children}</body>
+      <body className="bg-paper text-ink">{children}</body>
     </html>
   );
 }

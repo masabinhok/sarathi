@@ -120,7 +120,9 @@ export default function Admin() {
       <div className="flex min-h-dvh flex-col">
         <Header />
         <main className="mx-auto w-full max-w-md flex-1 px-5 py-16">
-          <h1 className="text-xl font-semibold tracking-[-0.01em]">Admin</h1>
+          <h1 className="font-display text-[1.5rem] font-medium tracking-[-0.01em]">
+            Admin
+          </h1>
           <p className="text-mute mt-2 text-sm leading-relaxed">
             Enter the admin token to manage documents and rebuild the index. It
             is the
@@ -144,16 +146,16 @@ export default function Admin() {
               onChange={(event) => setEntry(event.target.value)}
               placeholder="Admin token"
               aria-label="Admin token"
-              className="border-line focus:border-blue flex-1 rounded-lg border bg-transparent px-3 py-2.5 text-sm outline-none"
+              className="border-rule focus:border-ink flex-1 rounded-[7px] border bg-transparent px-3 py-2.5 text-sm outline-none"
             />
             <button
               type="submit"
-              className="bg-blue rounded-lg text-white px-4 py-2.5 text-sm font-medium"
+              className="bg-ink text-paper rounded-[7px] px-4 py-2.5 text-sm font-medium"
             >
               Continue
             </button>
           </form>
-          {error && <p className="text-rose mt-3 text-sm">{error}</p>}
+          {error && <p className="text-crimson mt-3 text-sm">{error}</p>}
         </main>
       </div>
     );
@@ -163,8 +165,10 @@ export default function Admin() {
     <div className="flex min-h-dvh flex-col">
       <Header />
       <main className="mx-auto w-full max-w-4xl flex-1 px-5 py-8">
-        <div className="border-line mb-6 flex items-baseline justify-between border-b pb-3">
-          <h1 className="text-xl font-semibold tracking-[-0.01em]">Admin</h1>
+        <div className="border-rule mb-6 flex items-baseline justify-between border-b pb-3">
+          <h1 className="font-display text-[1.5rem] font-medium tracking-[-0.01em]">
+            Admin
+          </h1>
           <button
             onClick={signOut}
             className="text-faint hover:text-ink text-xs underline underline-offset-2"
@@ -174,18 +178,18 @@ export default function Admin() {
         </div>
 
         {error && (
-          <p className="border-rose/40 text-rose bg-rose/5 mb-4 rounded-xl border px-3.5 py-2.5 text-sm">
+          <p className="border-crimson/40 text-crimson bg-crimson-soft mb-4 rounded-[10px] border px-3.5 py-2.5 text-sm">
             {error}
           </p>
         )}
         {note && (
-          <p className="border-emerald text-mute bg-emerald/5 mb-4 rounded-xl border px-3.5 py-2.5 text-sm">
+          <p className="border-rule-strong text-mute bg-card mb-4 rounded-[10px] border px-3.5 py-2.5 text-sm">
             {note}
           </p>
         )}
 
         <section className="mb-8">
-          <p className="text-mute mb-2 text-xs font-semibold">Add a document</p>
+          <p className="eyebrow mb-2">Add a document</p>
           <p className="text-mute mb-3 text-sm leading-relaxed">
             English Markdown with YAML frontmatter, as described in{" "}
             <code className="font-mono text-xs">docs/README.md</code>. Uploading
@@ -198,7 +202,7 @@ export default function Admin() {
               type="file"
               accept=".md"
               aria-label="Markdown file"
-              className="text-mute file:border-line file:text-ink hover:file:border-line-strong max-w-full text-sm file:mr-3 file:rounded-lg file:border file:bg-transparent file:px-3 file:py-1.5 file:text-sm"
+              className="text-mute file:border-rule file:text-ink hover:file:border-rule-strong max-w-full text-sm file:mr-3 file:rounded-[7px] file:border file:bg-transparent file:px-3 file:py-1.5 file:text-sm"
             />
             <button
               disabled={busy !== null}
@@ -220,7 +224,7 @@ export default function Admin() {
                   return `${result.name} ${result.replaced ? "replaced" : "added"}. Rebuild the index to publish it.`;
                 })
               }
-              className="border-line hover:border-line-strong rounded-lg border px-3 py-1.5 text-sm transition disabled:opacity-40"
+              className="border-rule hover:border-rule-strong rounded-[7px] border px-3 py-1.5 text-sm transition disabled:opacity-40"
             >
               {busy === "upload" ? "Uploading…" : "Upload"}
             </button>
@@ -228,8 +232,8 @@ export default function Admin() {
         </section>
 
         <section className="mb-8">
-          <div className="border-line mb-3 flex flex-wrap items-baseline justify-between gap-2 border-b pb-2">
-            <p className="text-mute text-xs font-semibold">
+          <div className="border-rule mb-3 flex flex-wrap items-baseline justify-between gap-2 border-b pb-2">
+            <p className="eyebrow">
               Indexed documents
               {status ? ` · ${status.total_chunks} chunks` : ""}
             </p>
@@ -248,7 +252,7 @@ export default function Admin() {
                     return `Index rebuilt — ${result.chunks} chunks.`;
                   })
                 }
-                className="bg-blue rounded-lg text-white px-3 py-1.5 text-xs font-medium transition disabled:opacity-40"
+                className="bg-ink text-paper rounded-[7px] px-3 py-1.5 text-xs font-medium transition disabled:opacity-40"
               >
                 {busy === "reindex" ? "Rebuilding…" : "Rebuild index"}
               </button>
@@ -273,7 +277,7 @@ export default function Admin() {
                       : `${result.count} notices collected from all sources.`;
                   })
                 }
-                className="border-line hover:border-line-strong rounded-lg border px-3 py-1.5 text-xs transition disabled:opacity-40"
+                className="border-rule hover:border-rule-strong rounded-[7px] border px-3 py-1.5 text-xs transition disabled:opacity-40"
               >
                 {busy === "notices" ? "Fetching…" : "Refresh notices"}
               </button>
@@ -281,7 +285,7 @@ export default function Admin() {
           </div>
 
           {status && (
-            <ul className="divide-line divide-y">
+            <ul className="divide-rule divide-y">
               {status.documents.map((doc) => (
                 <li
                   key={doc.name}
@@ -309,7 +313,7 @@ export default function Admin() {
                         return `${doc.name} removed. Rebuild the index to apply it.`;
                       })
                     }
-                    className="text-faint hover:text-rose shrink-0 text-xs underline underline-offset-2 transition"
+                    className="text-faint hover:text-crimson shrink-0 text-xs underline underline-offset-2 transition"
                   >
                     Remove
                   </button>

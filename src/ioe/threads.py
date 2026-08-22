@@ -114,6 +114,11 @@ NAMES = {
     "tu": "TU",
     "barch": "BArch",
     "b.arch": "B.Arch",
+    # The compound is what the model actually writes, and it is one token to the
+    # splitter, so repairing the parts separately would never reach it.
+    "be/barch": "BE/BArch",
+    "be/b.arch": "BE/B.Arch",
+    "b.e./b.arch": "B.E./B.Arch",
     "esewa": "eSewa",
     "khalti": "Khalti",
     "pulchowk": "Pulchowk",

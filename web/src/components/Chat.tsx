@@ -52,6 +52,11 @@ export default function Chat({
   // so the first run always loads, even when there is no thread to load.
   const shown = useRef<string | null | undefined>(undefined);
   const bottom = useRef<HTMLDivElement>(null);
+  // Whether the reader is still following the end of the conversation. While they are,
+  // new tokens scroll into view; the moment they scroll away to re-read something, they
+  // are left where they put themselves.
+  const following = useRef(true);
+  const [detached, setDetached] = useState(false);
   // A question handed over from the landing page must be asked exactly once, even
   // though effects run twice in development.
   const handedOver = useRef(false);
@@ -65,6 +70,7 @@ export default function Chat({
     current.current = threadId;
     setError(null);
     setMessages([]);
+    following.current = true;
     if (!threadId) return;
 
     let live = true;
@@ -84,9 +90,67 @@ export default function Chat({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial]);
 
+  const empty = messages.length === 0;
+
+  // How far past the fold the end marker may sit and still count as "being read". Covers
+  // the composer, which is sticky and overlaps the last line of a long answer.
+  const SLACK = 120;
+
+  // Following is measured off the marker's position in the viewport, which is the one
+  // measurement that holds at every width: above xl the conversation scrolls inside its
+  // own column, below xl the whole page does.
+  //
+  // An IntersectionObserver cannot do this job. Its callback is asynchronous, so between
+  // the reader scrolling away and the observer reporting it, the next token has already
+  // scrolled the marker back into view -- and the observer then reports that everything
+  // is fine. It can never detach. A scroll listener runs before the next token does.
   useEffect(() => {
-    if (messages.length) bottom.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streaming]);
+    if (empty) return;
+
+    const atEnd = () => {
+      const marker = bottom.current;
+      if (!marker) return true;
+      return marker.getBoundingClientRect().top <= window.innerHeight + SLACK;
+    };
+
+    const settle = () => {
+      following.current = atEnd();
+      setDetached(!following.current);
+    };
+    const away = (event: WheelEvent) => {
+      if (event.deltaY >= 0) return;
+      // A wheel up is unambiguous and arrives before the scroll it causes, so it settles
+      // the race in the reader's favour even mid-token.
+      following.current = false;
+      setDetached(true);
+    };
+
+    // Scroll events do not bubble, but a capturing listener on the document sees them
+    // from whichever element is actually scrolling.
+    document.addEventListener("scroll", settle, {
+      capture: true,
+      passive: true,
+    });
+    window.addEventListener("wheel", away, { passive: true });
+    window.addEventListener("resize", settle, { passive: true });
+    return () => {
+      document.removeEventListener("scroll", settle, { capture: true });
+      window.removeEventListener("wheel", away);
+      window.removeEventListener("resize", settle);
+    };
+  }, [empty]);
+
+  useEffect(() => {
+    // Not smooth: this runs once per token, and queued animations arrive behind the text
+    // that prompted them.
+    if (following.current) bottom.current?.scrollIntoView({ block: "end" });
+  }, [messages]);
+
+  function jumpToLatest() {
+    following.current = true;
+    setDetached(false);
+    bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }
 
   async function ask(text: string) {
     if (!text || streaming) return;
@@ -94,6 +158,9 @@ export default function Chat({
     setInput("");
     setError(null);
     setStreaming(true);
+    // Asking is a request to see the answer, wherever they had scrolled to before.
+    following.current = true;
+    setDetached(false);
     onStreaming(true);
     onActivity(current.current);
     setMessages((prev) => [
@@ -139,8 +206,6 @@ export default function Chat({
       onStreaming(false);
     }
   }
-
-  const empty = messages.length === 0;
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -206,7 +271,8 @@ export default function Chat({
                 </div>
               );
             })}
-            <div ref={bottom} />
+            {/* A pixel of height, because a zero-area target never intersects. */}
+            <div ref={bottom} className="h-px" />
           </div>
         )}
 
@@ -224,6 +290,20 @@ export default function Chat({
         }}
         className="bg-paper/90 sticky bottom-0 pt-3 pb-6 backdrop-blur"
       >
+        {/* Offered only while an answer is still being written and the reader has
+            scrolled off it -- the one moment the end of the conversation is moving
+            away from them. */}
+        {streaming && detached && (
+          <div className="mb-2 flex justify-center">
+            <button
+              type="button"
+              onClick={jumpToLatest}
+              className="border-rule bg-card text-mute hover:text-ink hover:border-rule-strong rounded-full border px-3 py-1 text-[0.75rem] transition"
+            >
+              Jump to the answer ↓
+            </button>
+          </div>
+        )}
         <div className="border-rule-strong focus-within:border-ink bg-card flex items-center gap-2 rounded-[10px] border px-3.5 py-2.5 transition">
           <input
             value={input}

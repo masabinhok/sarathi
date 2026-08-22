@@ -13,6 +13,7 @@ from ioe.rag import (
     OLLAMA_URL,
     format_context,
     get_store,
+    keep_grounded,
     rerank,
     source_payload,
 )
@@ -160,12 +161,16 @@ def retrieve(state: ChatState) -> dict:
         return {"context": "", "sources": []}
 
     ordered = rerank(state["query"], hits)
-    kept = [doc for doc, score in ordered if score >= MIN_RELEVANCE][:TOP_K]
+    kept = [(doc, score) for doc, score in ordered if score >= MIN_RELEVANCE][:TOP_K]
+    # The scores travel with the documents because the two uses want different cuts: the
+    # prompt takes everything that cleared MIN_RELEVANCE, while the citation block takes
+    # only what is strong enough to be worth naming. See source_payload.
+    #
     # Both keys are written on every path, including the empty one. State persists across
     # turns, so a turn that retrieves nothing has to clear the previous turn's documents
     # rather than inherit them and cite the wrong notice.
     return {
-        "context": format_context(kept) if kept else "",
+        "context": format_context([doc for doc, _ in kept]) if kept else "",
         "sources": source_payload(kept),
     }
 
@@ -196,21 +201,29 @@ def chat_node(state: ChatState) -> dict:
         prompt.append(SystemMessage(content=f"Reference documents:\n\n{context}"))
     prompt.extend(messages)
 
-    # Citations are assembled from what retrieval actually placed in this prompt, and the
-    # pass list leads when it was consulted, since an exact record outranks a passage that
-    # merely matched. Attaching them to the message rather than to the state keeps them
-    # with the turn they belong to, so the checkpointer can replay them into /api/history.
-    sources = state.get("sources") or []
+    answer = model.invoke(prompt)
+
+    # Citations are assembled from what retrieval placed in this prompt, then narrowed to
+    # the documents the finished answer visibly drew on. That second step is why this
+    # happens here rather than in retrieve: a question can pull good documents and still
+    # be answered with a refusal -- "How do I apply to Kathmandu University?" matches
+    # these notices closely -- and a refusal with a reading list under it is a lie about
+    # where the answer came from.
+    sources = keep_grounded(
+        answer.content or "", messages[-1].content, state.get("sources") or []
+    )
     if state.get("lookup"):
-        # The pass list and the notice that published it are one document at one URL, so
-        # citing both would print the same notice twice. The exact record keeps the slot:
-        # it is what the answer was actually read off.
+        # The pass list is exact and is not put to the same test: a form number was looked
+        # up in the published table, whatever the answer around it reads like. The pass
+        # list and the notice that published it are one document at one URL, so citing
+        # both would print the same notice twice, and the exact record keeps the slot.
         sources = [
             RESULT_SOURCE,
             *(s for s in sources if s.get("url") != RESULT_SOURCE["url"]),
         ]
 
-    answer = model.invoke(prompt)
+    # Attached to the message rather than to the state so they stay with the turn they
+    # belong to, and the checkpointer replays them into /api/history.
     if sources:
         answer.additional_kwargs["sources"] = sources[:MAX_SOURCES]
     return {"messages": answer}

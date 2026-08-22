@@ -110,21 +110,78 @@ def citation(doc: Document) -> str:
 
 # One citation per document, capped at what a student will actually click through.
 # Retrieval routinely returns several chunks of the same notice; listing each one would
-# make a four-source answer look like a six-source answer.
-MAX_SOURCES = 4
+# make a three-source answer look like a six-source answer.
+MAX_SOURCES = 3
 MAX_SECTIONS = 2
 
+# How far below the best hit a document may sit and still be named. Questions that
+# genuinely span notices keep all of them -- "what documents do I need for a quota"
+# cites three, within 0.02 of each other -- while a question one notice answers outright
+# cites that one, instead of trailing the four next-nearest things in the index behind it.
+CITATION_MARGIN = 0.03
 
-def source_payload(docs: list[Document]) -> list[dict]:
-    """Group retrieved chunks into one citation per document, in retrieval order.
+# Being in the prompt and being worth naming are different things, and no relevance score
+# can tell them apart: "How do I apply to Kathmandu University?" scores 0.63 against these
+# notices, higher than several real IOE questions, and the honest answer to it is a
+# refusal. So a document is named only if the answer visibly used it -- if the two share
+# distinctive wording that is in neither the question nor the boilerplate.
+#
+# The fraction is what separates, measured over eighteen real answers: what a grounded
+# answer says is mostly what its document says (0.17-0.75 of it), while a refusal is
+# mostly about the question (0.02-0.15). The band between those is narrow, so the cut
+# sits in it and errs downward -- losing a citation costs a link the student can still
+# find in the rail, while inventing one puts a source under a sentence it never wrote.
+#
+# The count guards the other end. A three-word answer that happens to share one term
+# scores a third by fraction alone, and that is noise, not grounding.
+MIN_SHARED_TERMS = 4
+MIN_SHARED_FRACTION = 0.16
 
-    The citations are built from what retrieval actually put in the prompt, not from
-    markers the model is asked to emit. A 7B model does not reliably produce those, and a
-    citation that is sometimes there is worse than none: the student cannot tell a missing
-    marker from an ungrounded answer.
+_TERM = re.compile(r"[a-z0-9][a-z0-9./-]{3,}")
+
+# Words that say nothing about which document an answer came from. The domain terms are
+# here for the same reason as the English ones: every notice in this corpus is about IOE
+# entrance examinations, so matching on "admission" identifies nothing.
+_BOILERPLATE = """about above after again against also among and any are because
+been before being below between both cannot could does doing down during each few for
+from further had has have having here how into itself just more most must not now off
+once only other ought our ours out over own same should some such than that the their
+theirs them then there these they this those through too under until very was were what
+when where which while who whom why will with would you your yours
+entrance exam examination admission admissions question questions answer information
+notice notices student students apply application applications ioe institute engineering
+tribhuvan university campus campuses please help handle can may need"""
+# Split off the literal so SIM905 does not rewrite the list into one unreadable line.
+_COMMON = frozenset(_BOILERPLATE.split())
+
+
+def distinctive(text: str) -> set[str]:
+    """The words in a passage that could identify it. Lowercased, no boilerplate."""
+    return {word for word in _TERM.findall(text.lower()) if word not in _COMMON}
+
+
+def source_payload(scored: list[tuple[Document, float]]) -> list[dict]:
+    """Candidate citations: one per document, best first, near-misses dropped.
+
+    These are what retrieval put in the prompt, not markers the model was asked to emit.
+    A 7B model does not reliably produce those, and a citation that is sometimes there is
+    worse than none: the student cannot tell a missing marker from an ungrounded answer.
+
+    Each entry carries the document's distinctive terms so that keep_grounded can check
+    the finished answer against it. chat_node strips them before the citation is stored.
     """
+    if not scored:
+        return []
+
+    # Sorted rather than assumed sorted: rerank passes hits through untouched for
+    # questions about foreign applicants.
+    ranked = sorted(scored, key=lambda pair: pair[1], reverse=True)
+    best = ranked[0][1]
+
     out: dict[str, dict] = {}
-    for doc in docs:
+    for doc, score in ranked:
+        if best - score > CITATION_MARGIN:
+            break
         meta = doc.metadata
         file = str(meta.get("file", "source"))
         entry = out.setdefault(
@@ -135,6 +192,7 @@ def source_payload(docs: list[Document]) -> list[dict]:
                 "url": meta.get("url") or None,
                 "file": file,
                 "sections": [],
+                "terms": [],
             },
         )
         # h1 restates the document title in every one of these notices, so a citation
@@ -142,10 +200,33 @@ def source_payload(docs: list[Document]) -> list[dict]:
         section = meta.get("h3") or meta.get("h2")
         if section and section not in entry["sections"]:
             entry["sections"].append(str(section))
+        entry["terms"] = sorted(set(entry["terms"]) | distinctive(doc.page_content))
 
     for entry in out.values():
         del entry["sections"][MAX_SECTIONS:]
     return list(out.values())[:MAX_SOURCES]
+
+
+def keep_grounded(answer: str, question: str, sources: list[dict]) -> list[dict]:
+    """Drop candidates the answer did not visibly draw on, and shed the term lists.
+
+    Terms the question itself supplied are discounted on both sides: a document does not
+    earn a citation by echoing the words it was searched with.
+    """
+    asked = distinctive(question)
+    written = distinctive(answer) - asked
+    if not written:
+        return []
+
+    kept = []
+    for source in sources:
+        shared = written & (set(source["terms"]) - asked)
+        if (
+            len(shared) >= MIN_SHARED_TERMS
+            and len(shared) / len(written) >= MIN_SHARED_FRACTION
+        ):
+            kept.append({key: value for key, value in source.items() if key != "terms"})
+    return kept
 
 
 def format_context(docs: list[Document]) -> str:

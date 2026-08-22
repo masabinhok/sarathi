@@ -26,5 +26,10 @@ If you need this information for a specific application or process, it's always 
 9. Guide the bot to answer smartly to answers
 10. play around with the bot for flaws and fix it.
 11. [FIXED] add a chat history on the left sidebar, make all three divs seperatly scrollabale, chat, notices and chat-history !
-12. include valid citations only, citations for relevant questions and not for out of scope questions, not necessary to mention 4 sources always, just mention where its from.
+12. [FIXED] include valid citations only, citations for relevant questions and not for out of scope questions, not necessary to mention 4 sources always, just mention where its from.
 13. should we add internet search tool? if added what should it use internet for, because we have to provide relevant information from our own docuemnt chunks, what usefulness will a internet search tool have?
+14. there is a bug, whenever i refresh, the latest query reruns again. its because user query is passed through search params, which is why! it's not the case in major chatbots, how do they handles this, and can we move to that system to fix this bug! also creating new chat history every time i refresh for the same question.
+15. i kinda don't like the current 3 layout strcutre, we can expand the chat window a little and push the notiecs to right, and without the limiting right border.(the left margin is the sweet spot, we should expand the second layer so that, the right margin equals left margin for the outer container that contains three layers(chatbot, history and notices, and remove the right border from the notices))
+16. Let's add one theme color, it looks so off with just black and white
+17. bug: when it's generating an answer, an i scroll up, it goes back to the answer streams, which is kinda bad ux. fix it!
+18.

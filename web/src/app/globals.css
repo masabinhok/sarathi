@@ -105,6 +105,28 @@ body {
   white-space: nowrap;
 }
 
+/* ── Scrolling panes ───────────────────────────────────────────────────────────
+   /ask puts three columns on one screen -- history, conversation, notices -- each
+   scrolling on its own so that reading a long answer never carries the notices off
+   the top. Two things make that pleasant rather than busy: hairline scrollbars in
+   the same warm rule colour as everything else, and contained overscroll, so
+   reaching the end of one column does not start dragging the page behind it. */
+.pane {
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule-strong) transparent;
+  overscroll-behavior: contain;
+}
+.pane::-webkit-scrollbar {
+  width: 6px;
+}
+.pane::-webkit-scrollbar-thumb {
+  background: var(--rule-strong);
+  border-radius: 3px;
+}
+.pane::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 .eyebrow {
   font-family: var(--font-mono);
   font-size: 0.6875rem;

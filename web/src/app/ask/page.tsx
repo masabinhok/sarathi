@@ -1,6 +1,5 @@
-import Chat from "@/components/Chat";
+import AskWorkspace from "@/components/AskWorkspace";
 import Header from "@/components/Header";
-import NoticeRail from "@/components/NoticeRail";
 
 export const metadata = { title: "Ask — Sarathi" };
 
@@ -9,18 +8,12 @@ export default async function AskPage({ searchParams }: PageProps<"/ask">) {
   const initial = typeof params.q === "string" ? params.q : "";
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    // On a wide screen the shell is exactly the viewport and the three columns inside it
+    // scroll independently. Narrower than that it becomes an ordinary page again, since
+    // a fixed-height shell on a phone means a chat column a few centimetres tall.
+    <div className="flex min-h-dvh flex-col xl:h-dvh xl:overflow-hidden">
       <Header />
-      {/* The conversation is centred on the viewport, not in the space left over beside
-          the notices: the rail lives in the right gutter so it cannot push the column
-          off axis. Below xl the rail simply moves underneath. */}
-      <main className="mx-auto grid w-full max-w-[84rem] flex-1 grid-cols-1 gap-12 px-5 sm:px-8 xl:grid-cols-[1fr_minmax(0,42rem)_1fr]">
-        <div className="hidden xl:block" />
-        <Chat initial={initial} />
-        <div className="border-rule border-t pt-8 pb-10 xl:border-t-0 xl:pt-12">
-          <NoticeRail />
-        </div>
-      </main>
+      <AskWorkspace initial={initial} />
     </div>
   );
 }

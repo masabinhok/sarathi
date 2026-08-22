@@ -10,8 +10,6 @@ import {
   type Source,
 } from "@/lib/api";
 
-const THREAD_KEY = "ioe.thread_id";
-
 // Phrased the way a student actually asks, and each one exercises a different path:
 // retrieval, the pass list, the date logic, the payment guides.
 const CHIPS = [
@@ -21,37 +19,68 @@ const CHIPS = [
   "How do I pay the fee with eSewa?",
 ];
 
-export default function Chat({ initial = "" }: { initial?: string }) {
+type Props = {
+  /** A question handed over from the landing page, asked once on arrival. */
+  initial?: string;
+  /** The conversation to show. Null starts an unsaved one. */
+  threadId: string | null;
+  /** The server assigned an id to a conversation that did not have one. */
+  onThread: (threadId: string) => void;
+  /** A turn began, so the sidebar can move this conversation to the top. */
+  onActivity: (threadId: string | null) => void;
+  /** The conversation was named. Arrives twice on a first turn: question, then title. */
+  onTitle: (threadId: string, title: string) => void;
+  onStreaming: (streaming: boolean) => void;
+  onNew: () => void;
+};
+
+export default function Chat({
+  initial = "",
+  threadId,
+  onThread,
+  onActivity,
+  onTitle,
+  onStreaming,
+  onNew,
+}: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const threadId = useRef<string | null>(null);
+  const current = useRef<string | null>(threadId);
+  // Which thread the transcript on screen belongs to. Starts undefined rather than null
+  // so the first run always loads, even when there is no thread to load.
+  const shown = useRef<string | null | undefined>(undefined);
   const bottom = useRef<HTMLDivElement>(null);
   // A question handed over from the landing page must be asked exactly once, even
   // though effects run twice in development.
   const handedOver = useRef(false);
 
+  // Swap the transcript when the sidebar opens a different conversation. The guard is
+  // for the id this component itself just caused: a new conversation gets its id from
+  // the server mid-stream, and reloading then would wipe the answer being written.
   useEffect(() => {
+    if (threadId === shown.current) return;
+    shown.current = threadId;
+    current.current = threadId;
+    setError(null);
+    setMessages([]);
+    if (!threadId) return;
+
     let live = true;
-
-    if (initial && !handedOver.current) {
-      handedOver.current = true;
-      void ask(initial);
-      return;
-    }
-
-    // Restore the previous conversation so a refresh doesn't lose the thread.
-    const saved = localStorage.getItem(THREAD_KEY);
-    if (saved) {
-      threadId.current = saved;
-      fetchHistory(saved)
-        .then((value) => live && setMessages(value))
-        .catch(() => {});
-    }
+    fetchHistory(threadId)
+      .then((value) => live && setMessages(value))
+      .catch(() => {});
     return () => {
       live = false;
     };
+  }, [threadId]);
+
+  useEffect(() => {
+    if (initial && !handedOver.current) {
+      handedOver.current = true;
+      void ask(initial);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial]);
 
@@ -65,6 +94,8 @@ export default function Chat({ initial = "" }: { initial?: string }) {
     setInput("");
     setError(null);
     setStreaming(true);
+    onStreaming(true);
+    onActivity(current.current);
     setMessages((prev) => [
       ...prev,
       { role: "user", content: text },
@@ -79,7 +110,7 @@ export default function Chat({ initial = "" }: { initial?: string }) {
       });
 
     try {
-      await sendMessage(text, threadId.current, {
+      await sendMessage(text, current.current, {
         onToken: (chunk: string) =>
           updateLast((message) => ({
             ...message,
@@ -87,9 +118,11 @@ export default function Chat({ initial = "" }: { initial?: string }) {
           })),
         onSources: (sources: Source[]) =>
           updateLast((message) => ({ ...message, sources })),
+        onTitle,
         onThread: (id) => {
-          threadId.current = id;
-          localStorage.setItem(THREAD_KEY, id);
+          current.current = id;
+          shown.current = id;
+          onThread(id);
         },
         onError: setError,
       });
@@ -103,14 +136,8 @@ export default function Chat({ initial = "" }: { initial?: string }) {
       );
     } finally {
       setStreaming(false);
+      onStreaming(false);
     }
-  }
-
-  function startOver() {
-    localStorage.removeItem(THREAD_KEY);
-    threadId.current = null;
-    setMessages([]);
-    setError(null);
   }
 
   const empty = messages.length === 0;
@@ -233,7 +260,7 @@ export default function Chat({ initial = "" }: { initial?: string }) {
         </div>
         {!empty && (
           <button
-            onClick={startOver}
+            onClick={onNew}
             type="button"
             className="text-faint hover:text-ink mt-2.5 text-[0.75rem] transition"
           >

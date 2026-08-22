@@ -15,9 +15,10 @@ from pydantic import BaseModel
 from starlette.responses import StreamingResponse
 
 from ioe import notices as notices_mod
+from ioe import threads as threads_mod
 from ioe.dates import today_payload
 from ioe.deadlines import as_payload as deadlines_payload
-from ioe.graph import TEXT_MODEL, chatbot
+from ioe.graph import TEXT_MODEL, get_chatbot
 from ioe.rag import DOCS_DIR, EMB_MODEL, build_index, load_documents
 
 # Read .env before anything reads os.environ, so ADMIN_TOKEN can live in a file
@@ -65,6 +66,16 @@ class Message(BaseModel):
     sources: list[Source] | None = None
 
 
+class Thread(BaseModel):
+    """One conversation as the history sidebar lists it."""
+
+    thread_id: str
+    title: str
+    created_at: str
+    updated_at: str
+    turns: int
+
+
 def _config(thread_id: str) -> dict:
     return {"configurable": {"thread_id": thread_id}}
 
@@ -81,6 +92,7 @@ async def _finished_sources(thread_id: str) -> list[dict] | None:
     A failure here costs the citations only -- never the answer the student already has.
     """
     try:
+        chatbot = await get_chatbot()
         state = await chatbot.aget_state(_config(thread_id))
     except Exception:  # noqa: BLE001 - an uncited answer still beats a truncated stream
         return None
@@ -88,9 +100,32 @@ async def _finished_sources(thread_id: str) -> list[dict] | None:
     return messages[-1].additional_kwargs.get("sources") if messages else None
 
 
-async def _stream(message: str, thread_id: str) -> AsyncIterator[str]:
+# How long a generated title may keep the student waiting once their answer is complete.
+# Past this the opening question stands in, and the model's version is dropped rather
+# than applied late -- a sidebar row that renames itself after you have read it is worse
+# than one that was always the question you asked.
+TITLE_TIMEOUT = 8.0
+
+
+async def _stream(message: str, thread_id: str, client_id: str) -> AsyncIterator[str]:
     yield _sse("start", {"thread_id": thread_id})
+
+    # Naming happens on the first turn only, and the provisional name is written before
+    # the answer starts: if the connection drops mid-stream the conversation is still in
+    # the sidebar, under the question that opened it.
+    naming = not await threads_mod.exists(thread_id)
+    title = threads_mod.fallback_title(message)
+    await threads_mod.record(thread_id, client_id, title)
+    if naming:
+        yield _sse("title", {"thread_id": thread_id, "title": title})
+        # Started here, read after the answer: the title is a second call to a 7B model
+        # that is already busy, and it must not delay the first token.
+        titling = asyncio.create_task(
+            asyncio.to_thread(threads_mod.make_title, message)
+        )
+
     try:
+        chatbot = await get_chatbot()
         stream = chatbot.astream(
             {"messages": [HumanMessage(content=message)]},
             _config(thread_id),
@@ -111,7 +146,23 @@ async def _stream(message: str, thread_id: str) -> AsyncIterator[str]:
     if sources:
         yield _sse("sources", {"sources": sources})
 
+    if naming:
+        better = await _await_title(titling)
+        if better and better != title:
+            await threads_mod.retitle(thread_id, better)
+            yield _sse("title", {"thread_id": thread_id, "title": better})
+
     yield _sse("done", {"thread_id": thread_id})
+
+
+async def _await_title(task: asyncio.Task) -> str | None:
+    """Collect the generated title if it arrived in time, and give up on it if not."""
+    try:
+        # A timeout cancels the task, which is the intent: nothing downstream is waiting
+        # on a title that arrived after the student had already read the answer.
+        return await asyncio.wait_for(task, TITLE_TIMEOUT)
+    except Exception:  # noqa: BLE001 - the opening question already titles the thread
+        return None
 
 
 @app.get("/api/health")
@@ -133,8 +184,31 @@ async def new_thread() -> dict:
     return {"thread_id": uuid.uuid4().hex}
 
 
+@app.get("/api/threads")
+async def list_threads(x_client_id: str = Header(default="")) -> list[Thread]:
+    """The conversations this browser started, newest first.
+
+    Scoped to the caller's own id rather than returning the whole table: there are no
+    accounts here, but a shared deployment would otherwise show every visitor everyone
+    else's questions, and those questions name real candidates and their results.
+    """
+    return [Thread(**row) for row in await threads_mod.listing(x_client_id)]
+
+
+@app.delete("/api/threads/{thread_id}")
+async def delete_thread(thread_id: str) -> dict:
+    """Forget a conversation: its index row and every checkpointed message."""
+    removed = await threads_mod.forget(thread_id)
+    chatbot = await get_chatbot()
+    await chatbot.checkpointer.adelete_thread(thread_id)
+    if not removed:
+        raise HTTPException(404, "no such conversation")
+    return {"thread_id": thread_id, "deleted": True}
+
+
 @app.get("/api/history/{thread_id}")
 async def history(thread_id: str) -> list[Message]:
+    chatbot = await get_chatbot()
     state = await chatbot.aget_state(_config(thread_id))
     messages = state.values.get("messages", []) if state.values else []
     out: list[Message] = []
@@ -153,10 +227,12 @@ async def history(thread_id: str) -> list[Message]:
 
 
 @app.post("/api/chat")
-async def chat(req: ChatRequest) -> StreamingResponse:
+async def chat(
+    req: ChatRequest, x_client_id: str = Header(default="")
+) -> StreamingResponse:
     thread_id = req.thread_id or uuid.uuid4().hex
     return StreamingResponse(
-        _stream(req.message, thread_id),
+        _stream(req.message, thread_id, x_client_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

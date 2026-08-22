@@ -18,10 +18,40 @@ export type Message = {
   sources?: Source[];
 };
 
+const CLIENT_KEY = "ioe.client_id";
+
+/**
+ * A random id for this browser, minted once and kept.
+ *
+ * Not a login and not a secret — it exists so the history sidebar shows the
+ * conversations this browser started rather than everyone's. Questions here name real
+ * candidates and their results, so they should not appear in a stranger's sidebar.
+ */
+function clientId(): string {
+  if (typeof window === "undefined") return "";
+  let id = localStorage.getItem(CLIENT_KEY);
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem(CLIENT_KEY, id);
+  }
+  return id;
+}
+
+/** One saved conversation, as the history sidebar lists it. */
+export type Thread = {
+  thread_id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  turns: number;
+};
+
 type StreamHandlers = {
   onToken: (text: string) => void;
   onThread?: (threadId: string) => void;
   onSources?: (sources: Source[]) => void;
+  /** Fires twice on a thread's first turn: the question, then the model's shorter name. */
+  onTitle?: (threadId: string, title: string) => void;
   onError?: (message: string) => void;
 };
 
@@ -64,7 +94,7 @@ export async function sendMessage(
 ) {
   const response = await fetch(`${API_URL}/api/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Client-Id": clientId() },
     body: JSON.stringify({ message, thread_id: threadId }),
     signal,
   });
@@ -76,6 +106,8 @@ export async function sendMessage(
     else if (event === "start") handlers.onThread?.(data.thread_id as string);
     else if (event === "sources")
       handlers.onSources?.(data.sources as Source[]);
+    else if (event === "title")
+      handlers.onTitle?.(data.thread_id as string, data.title as string);
     else if (event === "error") handlers.onError?.(data.message as string);
   });
 }
@@ -84,6 +116,18 @@ export async function fetchHistory(threadId: string): Promise<Message[]> {
   const response = await fetch(`${API_URL}/api/history/${threadId}`);
   if (!response.ok) return [];
   return response.json();
+}
+
+export async function fetchThreads(): Promise<Thread[]> {
+  const response = await fetch(`${API_URL}/api/threads`, {
+    headers: { "X-Client-Id": clientId() },
+  });
+  if (!response.ok) return [];
+  return response.json();
+}
+
+export async function deleteThread(threadId: string): Promise<void> {
+  await fetch(`${API_URL}/api/threads/${threadId}`, { method: "DELETE" });
 }
 
 export type Health = {

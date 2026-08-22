@@ -1,6 +1,9 @@
+import asyncio
+
+import aiosqlite
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama
-from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import MessagesState
 
@@ -14,6 +17,7 @@ from ioe.rag import (
     source_payload,
 )
 from ioe.results import RESULT_SOURCE, lookup_context
+from ioe.threads import DB_PATH
 
 TEXT_MODEL = "qwen2.5:7b"
 
@@ -226,6 +230,29 @@ graph.add_edge("lookup_result", "chat_node")
 graph.add_edge("chat_node", END)
 
 
-checkpointer = InMemorySaver()
+# Checkpoints live in the same SQLite file as the conversation index, on the same volume
+# as the notice cache. The earlier in-memory saver was fine while a conversation lasted
+# one page visit, but the history sidebar promises a conversation is still there
+# tomorrow, and a restart would otherwise leave the sidebar listing threads whose
+# messages no longer exist.
+_lock = asyncio.Lock()
+_chatbot = None
 
-chatbot = graph.compile(checkpointer=checkpointer)
+
+async def get_chatbot():
+    """The compiled graph, built on first use.
+
+    Not built at import: AsyncSqliteSaver binds itself to the running event loop in its
+    constructor, and at import time there isn't one. The lock makes the two requests that
+    can arrive together during startup share a single connection rather than race to open
+    two against the same file.
+    """
+    global _chatbot
+    if _chatbot is None:
+        async with _lock:
+            if _chatbot is None:
+                DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+                saver = AsyncSqliteSaver(aiosqlite.connect(DB_PATH))
+                await saver.setup()
+                _chatbot = graph.compile(checkpointer=saver)
+    return _chatbot

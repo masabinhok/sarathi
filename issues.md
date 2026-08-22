@@ -25,4 +25,6 @@ If you need this information for a specific application or process, it's always 
 8. remove unnecessary things, keep things that adds value, rethink on app's scope, extend to other campus or be limited to pulchowk, add more information to make the bot more robust
 9. Guide the bot to answer smartly to answers
 10. play around with the bot for flaws and fix it.
-11. add a chat history on the left sidebar, make all three divs seperatly scrollabale, chat, notices and chat-history !
+11. [FIXED] add a chat history on the left sidebar, make all three divs seperatly scrollabale, chat, notices and chat-history !
+12. include valid citations only, citations for relevant questions and not for out of scope questions, not necessary to mention 4 sources always, just mention where its from.
+13. should we add internet search tool? if added what should it use internet for, because we have to provide relevant information from our own docuemnt chunks, what usefulness will a internet search tool have?

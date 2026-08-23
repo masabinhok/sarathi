@@ -24,7 +24,7 @@ const GOALS = [
 
 const LIMITS = [
   "It will not tell you whether your rank is good enough for a campus. No cutoff data exists in the documents, and an estimate would be a guess with real consequences.",
-  "It answers in English, even when you write in Nepali. The documents are translated on the way in, because the model answers better reading English than translating while it reasons.",
+  "It answers in English, and will not switch if you ask it to. Write to it in Nepali or any other language and it will understand you — but its Nepali is not good enough to be trusted with a date or a fee, so the answer comes back in English.",
   "It only handles IOE admission and entrance questions, and refuses everything else.",
   "It is not affiliated with IOE or Tribhuvan University. It reads the same public notices you can.",
 ];

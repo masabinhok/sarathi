@@ -11,7 +11,7 @@ the open list and take the next free number.
 | `BUILT` | A question that turned into a feature; the decision record is kept with it. |
 | `SATISFIED` | Good enough; not being chased further. |
 
-### Open — 5
+### Open — 4
 
 | # | Issue | Area |
 | --- | --- | --- |
@@ -19,9 +19,8 @@ the open list and take the next free number.
 | [8](#8--rethink-the-apps-scope) | Rethink the app's scope | product |
 | [9](#9--guide-the-bot-to-answer-smartly) | Guide the bot to answer smartly | prompt / graph |
 | [10](#10--play-with-the-bot-and-fix-what-breaks) | Play with the bot and fix what breaks | prompt / graph |
-| [19](#19--it-answers-in-hindi-when-asked-for-nepali) | It answers in Hindi when asked for Nepali | prompt / graph |
 
-### Closed — 15
+### Closed — 16
 
 | # | Issue | Status |
 | --- | --- | --- |
@@ -39,6 +38,7 @@ the open list and take the next free number.
 | [16](#16--fixed--add-a-theme-colour) | Add a theme colour | `FIXED` |
 | [17](#17--fixed--scrolling-up-mid-answer-yanks-you-back-down) | Scrolling up mid-answer yanks you back down | `FIXED` |
 | [18](#18--fixed--the-streaming-answer-hides-under-the-composer) | The streaming answer hides under the composer | `FIXED` |
+| [19](#19--fixed--it-answers-in-hindi-when-asked-for-nepali) | It answers in Hindi when asked for Nepali | `FIXED` |
 | [20](#20--fixed--the-theme-colour-barely-shows) | The theme colour barely shows | `FIXED` |
 
 ---
@@ -77,11 +77,6 @@ Known live flaws, none fixed:
   sources one time and 0 the next.
 - "Any new notice this week" under-reports — it listed only the two published that day and
   said there were no others, with three more inside the week.
-
-## 19 · It answers in Hindi when asked for Nepali
-
-when i asked it to speak in nepali, it started talking in hindi. so we should strictly make
-the bot speak in english only. it is incapable of speaking other languages properly.
 
 ---
 
@@ -226,6 +221,52 @@ issue 17 fixed but created a new error: answer doesnot stream properly or not vi
 Caused by the 17 fix. `scrollIntoView({block:"end"})` aims at the foot of the scrollport,
 which the sticky composer sits over; both the follow scroll and the "still reading" test now
 measure against the composer's own top edge.
+
+## 19 · `FIXED` · It answers in Hindi when asked for Nepali
+
+when i asked it to speak in nepali, it started talking in hindi. so we should strictly make
+the bot speak in english only. it is incapable of speaking other languages properly.
+
+Confirmed against the live bot before touching anything, and worse than reported. All four
+probes switched: asked to reply in Nepali it wrote 762 Devanagari characters, half of them
+Hindi; asked in Nepali with no instruction at all it answered in Nepali *and invented
+syllabus subjects*; asked for Hindi it answered in Hindi. The rule existed — one bullet,
+sixty lines into `SYSTEM_PROMPT` — and `qwen2.5:7b` never looked at it.
+
+Four rounds of prompting could not fix it, each failing differently:
+
+| attempt | result |
+| --- | --- |
+| the buried bullet, as shipped | 0/4 English |
+| hoisted `Language:` section, "refuse then answer" | wrote the refusal *in Nepali* |
+| "copy this exact sentence, then answer" | 12/12 English, 3/12 sent the sentence and nothing else |
+| "the refusal is handled, ignore the request" | 6/18 — straight back to Nepali |
+
+The pattern across all four is that naming the request in the prompt is what keeps it
+alive. So it is not named any more. What runs instead is deterministic:
+
+- **The request is stripped from the question.** A language name alone does not count —
+  it takes a language *and* a speech verb, so "is the exam set in Nepali?" survives.
+- **If stripping would leave nothing, nothing is stripped.** "Can I answer the exam paper
+  in Nepali?" reads as a request by every test, but it *is* the question, so it gets the
+  ordinary treatment. Verified: answers correctly about exam language, in English.
+- **The app writes the refusal sentence, not the model.** Fixed wording that cannot drift
+  and cannot be mistaken for the whole reply. `api._stream` sends it ahead of the first
+  token and `chat_node` prepends it to the stored message, so live and reloaded agree.
+- **A Nepali question is translated to English before the model reads it.** "Do not mirror
+  the student's language" did not hold either. Translating removes the thing being
+  mirrored, and it is the same bargain the documents already get. Retrieval gains from it
+  too: an English query embeds against an English index instead of across languages.
+
+The student's own words stay in the transcript; only the copy the model reads is rewritten.
+The pass list lookup deliberately still reads the raw message — a form number that survives
+a paraphrase may not survive a translation, and "फारम नम्बर 2083-4001 पास भयो?" still
+resolves to the right candidate.
+
+**24 turns, 8 cases, 3 runs each: every answer in English, every question answered.** Zero
+Devanagari in every case that asked for another language or was written in one. The 1-3%
+Devanagari left in the English controls is the desirable kind — official Nepali terms
+quoted in brackets after the English, which the notices themselves use.
 
 ## 20 · `FIXED` · The theme colour barely shows
 

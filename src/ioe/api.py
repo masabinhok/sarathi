@@ -18,7 +18,7 @@ from ioe import notices as notices_mod
 from ioe import threads as threads_mod
 from ioe.dates import today_payload
 from ioe.deadlines import as_payload as deadlines_payload
-from ioe.graph import TEXT_MODEL, get_chatbot
+from ioe.graph import TEXT_MODEL, english_only_preface, get_chatbot
 from ioe.rag import (
     DOCS_DIR,
     EMB_MODEL,
@@ -141,6 +141,11 @@ async def _stream(message: str, thread_id: str, client_id: str) -> AsyncIterator
             _config(thread_id),
             stream_mode="messages",
         )
+        # The app's own words, before the model's. See graph.english_only_preface.
+        preface = english_only_preface(message)
+        if preface:
+            yield _sse("token", {"text": preface})
+
         async for chunk, metadata in stream:
             # The graph also calls the model to rewrite follow-up queries for retrieval;
             # only the answer node's tokens belong in the UI.

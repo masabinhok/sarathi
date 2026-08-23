@@ -1,4 +1,5 @@
 import asyncio
+import re
 
 import aiosqlite
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -46,6 +47,16 @@ student asks about anything else -- coding, homework, general knowledge, other \
 universities, personal advice -- you must refuse. Do not answer the off-topic question \
 even partially. Say in one sentence that you only handle IOE admission and entrance \
 questions, then invite them to ask one.
+
+Language: you write in English. Always, in every answer, whatever language the question \
+was written in and whatever language the student asks you to use. Students are welcome \
+to write to you in Nepali or any other language -- understand the question and answer \
+it -- but the answer itself is English. Two reasons, and you may give them: the notices \
+you answer from are English, and your Nepali is not good enough to give a student \
+information they will act on. If a student asks you to reply in another language, say in \
+one sentence that you answer only in English, then answer their question in English \
+anyway. You may still quote a Nepali term from a notice in brackets after the English \
+-- naming the official wording is not switching language.
 
 Using a pass list lookup:
 - A "Pass list lookup" block below is an exact record from the published result table, not a guess. Never alter a rank, name, or district from it.
@@ -102,7 +113,6 @@ Formatting your answer:
 - Do not use emoji, and do not decorate an answer with headings it does not need. A four-sentence answer is four sentences, not a document.
 
 Rules:
-- Always reply in English, even if the student writes in another language.
 - Never invent year-specific facts. Exam dates, deadlines, fees, seat counts, cutoff \
 marks, and results change every year. If you are not certain, say so plainly rather \
 than guessing.
@@ -130,6 +140,10 @@ Standalone search query:"""
 
 
 class ChatState(MessagesState):
+    # The student's question as the model should read it: any "reply in Nepali" taken
+    # out, and translated to English if it was not written in English. The message the
+    # student actually typed stays in `messages`, which is what the transcript shows.
+    question: str
     query: str
     context: str
     lookup: str
@@ -139,18 +153,146 @@ class ChatState(MessagesState):
 model = ChatOllama(model=TEXT_MODEL, base_url=OLLAMA_URL)
 
 
-def rewrite_query(state: ChatState) -> dict:
-    """Condense a follow-up into a standalone query so it embeds meaningfully.
+# ── Keeping the answer in English ─────────────────────────────────────────────
+# SYSTEM_PROMPT says to answer in English and on its own that does not hold. Measured
+# against the live bot: asked "please reply in Nepali", asked in Nepali with no
+# instruction at all, and asked for Hindi, qwen2.5:7b switched every time -- and what it
+# produced was not worth reading, mixing Hindi into Nepali sentences and inventing
+# syllabus subjects while it was at it.
+#
+# Four rounds of prompting could not fix it. Told to refuse and then answer, the model
+# wrote the refusal in Nepali; given the refusal to copy, it copied it and then treated
+# it as the whole reply on 3 of 12 runs; told the refusal was already handled and to
+# ignore the request, it went back to Nepali on 12 of 18. The pattern across all four is
+# that naming the request in the prompt is what keeps it alive.
+#
+# So the request is not named. It is removed. The sentence asking for another language
+# is stripped out of the question, the app says the one thing that needs saying, and the
+# model is handed an ordinary question -- which it answers in English, because that is
+# what it does with ordinary questions.
 
-    "What about the fees?" retrieves nothing useful on its own; against the history it
-    becomes "BArch entrance exam fees". Skipped on the first turn, which needs no context.
+_DEVANAGARI = re.compile(r"[\u0900-\u097f]")
+_LATIN = re.compile(r"[A-Za-z]")
+
+# Languages a student might ask to be answered in. English is deliberately absent: a
+# student asking for English is asking for what they are already getting.
+_OTHER_LANGUAGE = re.compile(
+    r"\b(nepali|nepalese|hindi|newari|newa|maithili|bhojpuri|urdu|bengali|bangla|"
+    r"tamil|chinese|mandarin|japanese|korean|arabic|russian|spanish|french|german|"
+    r"portuguese|italian|devanagari)\b"
+    r"|नेपाली|हिन्दी|हिंदी|मैथिली|भोजपुरी|नेवारी|उर्दू",
+    re.IGNORECASE,
+)
+
+# A language on its own is not a request -- "is the exam set in Nepali" is a question
+# about the exam. It takes a language and something that means "say it", together.
+_SPEECH = re.compile(
+    r"\b(reply|replies|answer|answers|respond|responds|write|writes|say|says|speak|"
+    r"speaks|talk|talks|explain|explains|translate|translates|tell|tells)\b"
+    r"|जवाफ|जवाब|भन्नु|लेख्नु|बोल्नु|दिनुहोस्|सुनाउनु|बताइए|समझाइए|लिखिए",
+    re.IGNORECASE,
+)
+
+# Devanagari ends a sentence with a danda, which no ASCII sentence splitter knows about.
+_SENTENCE = re.compile(r"(?<=[.!?।])\s+|\n+")
+
+# The app's own words. Fixed, so the wording cannot drift from one turn to the next, and
+# naming no particular language, because the same sentence has to serve a request for
+# Nepali and a request for Hindi.
+ENGLISH_ONLY_SENTENCE = (
+    "I answer only in English. The notices I work from are in English, and I am not "
+    "reliable enough in any other language to be trusted with something you will act on."
+)
+
+TRANSLATE_PROMPT = """Translate the student's message into English.
+
+Output only the translation. No preamble, no quotes, no explanation, no note about what \
+you did. Keep a question a question. Leave proper nouns, form numbers, dates and any \
+English already in the message exactly as they are.
+
+Message: {question}
+
+English:"""
+
+
+def without_language_request(question: str) -> str:
+    """The question with any "reply in <language>" sentence taken out of it.
+
+    Returns the question unchanged when it contains no such sentence -- and, crucially,
+    when the request *is* the whole question. "Can I answer the exam paper in Nepali?"
+    reads as a request by every test above, and stripping it would leave nothing to
+    answer; a student asking that is asking about the exam, so they get the ordinary
+    treatment and an ordinary answer.
+    """
+    parts = [p for p in _SENTENCE.split(question) if p.strip()]
+    kept = [p for p in parts if not (_OTHER_LANGUAGE.search(p) and _SPEECH.search(p))]
+    if not kept or len(kept) == len(parts):
+        return question
+    return " ".join(p.strip() for p in kept)
+
+
+def english_only_preface(question: str) -> str:
+    """The app's sentence for a turn that asked for another language, or "".
+
+    Used twice on the same turn and it must agree with itself: api._stream sends it
+    ahead of the model's first token so the student sees it as the answer opens, and
+    chat_node prepends it to the stored message so a reloaded conversation reads the
+    same as the one that was watched live.
+    """
+    if without_language_request(question) == question:
+        return ""
+    return f"{ENGLISH_ONLY_SENTENCE}\n\n"
+
+
+def _in_devanagari(text: str) -> bool:
+    """Whether the text is written in Devanagari rather than merely quoting a term in it."""
+    return len(_DEVANAGARI.findall(text)) > len(_LATIN.findall(text))
+
+
+def read_in_english(question: str) -> str:
+    """The question in English, translating it first if it was not written that way.
+
+    Telling the model not to mirror the student's language does not hold either -- it
+    answered a Nepali question in Nepali often enough to matter. Translating removes the
+    thing being mirrored: the model is handed an English question, and English questions
+    it answers in English every time.
+
+    This is the same bargain the documents already get. They are translated on the way in
+    because the model reads English better than it translates while it reasons, and a
+    question is no different. Retrieval gets the same benefit for free: an English query
+    embeds against an English index rather than across languages.
+
+    The student's own words are what the transcript keeps. Only the copy the model reads
+    is translated.
+    """
+    if not _in_devanagari(question):
+        return question
+    try:
+        rendered = model.invoke(
+            [HumanMessage(content=TRANSLATE_PROMPT.format(question=question))]
+        )
+        english = (rendered.content or "").strip()
+    except Exception:  # noqa: BLE001 - a failed translation must not fail the answer
+        return question
+    # A translation that came back empty, or still in Devanagari, is no translation.
+    return question if not english or _in_devanagari(english) else english
+
+
+def rewrite_query(state: ChatState) -> dict:
+    """Settle what the question is, then condense it into a search query.
+
+    Two steps that both have to happen before anything else reads the question. First it
+    is put into the form the model should see -- request to switch language removed, and
+    translated to English if it was not written in English. Then, on a follow-up, it is
+    condensed against the history: "what about the fees?" retrieves nothing useful on its
+    own, but becomes "BArch entrance exam fees". The first turn needs no condensing.
     """
     messages = state["messages"]
-    question = messages[-1].content
+    question = read_in_english(without_language_request(messages[-1].content))
 
     prior = messages[:-1]
     if not prior:
-        return {"query": question}
+        return {"question": question, "query": question}
 
     history = "\n".join(
         f"{'Student' if isinstance(m, HumanMessage) else 'Assistant'}: {m.content}"
@@ -163,7 +305,10 @@ def rewrite_query(state: ChatState) -> dict:
             )
         ]
     )
-    return {"query": (rewritten.content or question).strip() or question}
+    return {
+        "question": question,
+        "query": (rewritten.content or question).strip() or question,
+    }
 
 
 def retrieve(state: ChatState) -> dict:
@@ -193,9 +338,9 @@ def retrieve(state: ChatState) -> dict:
 
 def lookup_result(state: ChatState) -> dict:
     """Answer form-number questions from the exact pass list, not from retrieval."""
-    question = state["messages"][-1].content
-    # Search the raw question, not the rewrite, so the model cannot mangle a number.
-    return {"lookup": lookup_context(question)}
+    # The raw message, not the rewritten or translated one: both of those go through the
+    # model, and a form number that survives a paraphrase may not survive a translation.
+    return {"lookup": lookup_context(state["messages"][-1].content)}
 
 
 def chat_node(state: ChatState) -> dict:
@@ -213,7 +358,9 @@ def chat_node(state: ChatState) -> dict:
 
     # Resolve BS dates from both the question and the retrieved text, so the model reads
     # off conversions instead of attempting calendar arithmetic it gets wrong.
-    dates = annotate_dates(f"{messages[-1].content}\n{context or ''}")
+    dates = annotate_dates(
+        f"{state.get('question') or messages[-1].content}\n{context or ''}"
+    )
     if dates:
         prompt.append(SystemMessage(content=dates))
 
@@ -222,9 +369,25 @@ def chat_node(state: ChatState) -> dict:
         prompt.append(SystemMessage(content=lookup))
     if context:
         prompt.append(SystemMessage(content=f"Reference documents:\n\n{context}"))
-    prompt.extend(messages)
+
+    # rewrite_query settled what the question is: stripped of any request to answer in
+    # another language, and in English. The message the student typed stays in the
+    # transcript untouched -- only the copy the model reads is swapped.
+    asked = messages[-1].content
+    question = state.get("question") or asked
+    prompt.extend(
+        messages
+        if question == asked
+        else [*messages[:-1], HumanMessage(content=question)]
+    )
 
     answer = model.invoke(prompt)
+
+    # api._stream has already sent this ahead of the first token; putting it on the
+    # stored message is what keeps the reloaded conversation identical to the live one.
+    preface = english_only_preface(asked)
+    if preface:
+        answer.content = preface + (answer.content or "")
 
     # Citations are assembled from what retrieval placed in this prompt, then narrowed to
     # the documents the finished answer visibly drew on. That second step is why this
@@ -232,9 +395,7 @@ def chat_node(state: ChatState) -> dict:
     # be answered with a refusal -- "How do I apply to Kathmandu University?" matches
     # these notices closely -- and a refusal with a reading list under it is a lie about
     # where the answer came from.
-    sources = keep_grounded(
-        answer.content or "", messages[-1].content, state.get("sources") or []
-    )
+    sources = keep_grounded(answer.content or "", question, state.get("sources") or [])
     if state.get("lookup"):
         # The pass list is exact and is not put to the same test: a form number was looked
         # up in the published table, whatever the answer around it reads like. The pass

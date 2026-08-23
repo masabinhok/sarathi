@@ -30,13 +30,18 @@ export default function Home() {
       <main className="flex-1">
         <Hero />
 
-        <section className="border-rule border-t">
+        {/* The one tinted field on the site. These three claims are the app talking
+            about itself rather than reporting a notice, so the band is laid in the
+            app's own colour -- and it is what keeps the page from opening as three
+            screens of white. The rules inside it take the same cast, so the band
+            reads as one sheet of paper rather than a warm grid on a cool ground. */}
+        <section className="bg-lapis-soft">
           <div className="mx-auto max-w-[84rem] px-5 sm:px-8">
             <div className="grid md:grid-cols-3">
               {PROMISES.map(({ label, title, body }, i) => (
                 <article
                   key={label}
-                  className={`border-rule py-10 md:px-8 md:first:pl-0 md:last:pr-0 ${
+                  className={`border-lapis/15 py-10 md:px-8 md:first:pl-0 md:last:pr-0 ${
                     i > 0 ? "border-t md:border-t-0 md:border-l" : ""
                   }`}
                 >
@@ -57,19 +62,19 @@ export default function Home() {
           <div className="mx-auto grid max-w-[84rem] gap-12 px-5 py-16 sm:px-8 lg:grid-cols-[1fr_24rem]">
             <div className="max-w-[38rem]">
               <h2 className="font-display text-[clamp(1.75rem,4vw,2.25rem)] leading-tight font-medium tracking-[-0.02em]">
-                Four campuses publish to four websites. This is all of them, in
-                one place.
+                Six notice boards, six websites. This is all of them, in one
+                place.
               </h2>
               <p className="text-mute mt-5 text-[1rem] leading-relaxed">
                 The Entrance Exam Board, the Institute of Engineering, Tribhuvan
-                University and Pulchowk Campus each post their own notices.
-                Sarathi collects them into a single index, newest first, with
-                the published date in both calendars — and you can ask about any
-                of them.
+                University, and the Pulchowk, Pashchimanchal and Purwanchal
+                campuses each post their own notices. Sarathi collects them into
+                a single index, newest first, with the published date in both
+                calendars — and you can ask about any of them.
               </p>
               <Link
                 href="/notices"
-                className="text-ink decoration-rule-strong hover:decoration-current mt-6 inline-block text-[0.9375rem] font-medium underline underline-offset-4"
+                className="text-lapis decoration-lapis/40 hover:decoration-lapis mt-6 inline-block text-[0.9375rem] font-medium underline underline-offset-4"
               >
                 Browse every notice
               </Link>

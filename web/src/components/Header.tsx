@@ -44,9 +44,11 @@ export default function Header() {
                 key={href}
                 href={href}
                 aria-current={active ? "page" : undefined}
+                // The page you are on is marked the same way the conversation you
+                // are in is marked in the sidebar: lapis, and only lapis.
                 className={
                   active
-                    ? "text-ink border-ink border-b pb-0.5"
+                    ? "text-lapis border-lapis border-b pb-0.5"
                     : "text-mute hover:text-ink border-b border-transparent pb-0.5 transition"
                 }
               >

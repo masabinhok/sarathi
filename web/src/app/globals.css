@@ -19,17 +19,35 @@
   --rule: #e7e1d8;
   --rule-strong: #d6cec1;
 
-  /* Crimson is state, never decoration: it marks a date with a consequence and
-     nothing else. No link, button, or brand mark is allowed to use it. */
+  /* ── Two pigments, three jobs ──────────────────────────────────────────────
+     The page has two voices on it, and the colour says which is speaking.
+
+       ink      what the notices themselves say -- headlines, prose, the answer.
+       lapis    the app's own hand: the datelines it computed, the labels it
+                prints over other people's words, the controls it offers, and
+                the row you are currently on.
+       crimson  consequence. On a student's page that means one thing exactly --
+                a date that has passed, or is about to -- and no link, button or
+                brand mark is allowed to borrow it. The admin console extends it
+                to the single destructive control it has, which is the same
+                meaning at a different scale.
+
+     Crimson outranks lapis wherever they meet, because a passed deadline is the
+     one thing on the page that must never be mistaken for chrome.
+
+     An earlier pass confined lapis to the interactive layer alone, which was
+     honest but nearly invisible: this app's whole interactive surface is one
+     send button and a handful of links, so the product read as black and white.
+     Extending it to the dateline and the label layer is not a dilution -- both
+     are things Sarathi contributes rather than quotes, which is the same rule
+     stated at its proper scope. The hue is the blue of the flag, which is why
+     it sits beside this particular crimson without either looking borrowed. */
   --crimson: #9b1c2e;
   --crimson-soft: #f7edee;
 
-  /* Lapis is the other half of that bargain: everything the reader can act on --
-     a link, the send button, the conversation they are in, whatever holds focus --
-     and nothing they cannot. Two pigments, two meanings, no overlap. The hue is
-     the blue of the flag, which is why it sits beside this particular crimson
-     without either one looking borrowed. */
   --lapis: #1f3a93;
+  /* Pale enough to sit under body text, blue enough to read as a decision. */
+  --lapis-soft: #eef0fa;
 
   --ring: color-mix(in oklab, var(--lapis) 55%, transparent);
 }
@@ -49,6 +67,7 @@
 
   /* Lifted well past the light value: #1f3a93 on near-black is a hole in the page. */
   --lapis: #8fa9f2;
+  --lapis-soft: #1a2140;
 
   --ring: color-mix(in oklab, var(--lapis) 70%, transparent);
 }
@@ -64,6 +83,7 @@
   --color-crimson: var(--crimson);
   --color-crimson-soft: var(--crimson-soft);
   --color-lapis: var(--lapis);
+  --color-lapis-soft: var(--lapis-soft);
 
   /* DM Sans carries no Devanagari; Nepali titles fall through to Plex Deva. */
   --font-sans: var(--font-dmsans), var(--font-deva), system-ui, sans-serif;
@@ -99,18 +119,25 @@ body {
   line-height: 1.2;
 }
 /* Both dates stay numeric so the digits column up; a month name would wrap and
-   break the rule that makes the device work. */
+   break the rule that makes the device work.
+
+   Set in lapis, because the dateline is the one thing on a notice row that the
+   notice did not write: the BS date is read off the site, the AD date beneath it
+   is converted here. Colouring it says so, and it is what puts the pigment on
+   every page without putting it on anything decorative. */
 .dateline-bs {
   font-size: 0.75rem;
   font-weight: 500;
   letter-spacing: -0.02em;
-  color: var(--ink);
+  color: var(--lapis);
   white-space: nowrap;
 }
 .dateline-ad {
   margin-top: 3px;
   padding-top: 3px;
-  border-top: 1px solid var(--rule);
+  /* The hairline picks up the cast too, so the two dates read as one object
+     rather than a blue line above a grey one. */
+  border-top: 1px solid color-mix(in oklab, var(--lapis) 28%, var(--rule));
   font-size: 0.6875rem;
   color: var(--faint);
   white-space: nowrap;
@@ -124,7 +151,8 @@ body {
    reaching the end of one column does not start dragging the page behind it. */
 .pane {
   scrollbar-width: thin;
-  scrollbar-color: var(--rule-strong) transparent;
+  scrollbar-color: color-mix(in oklab, var(--lapis) 30%, var(--rule-strong))
+    transparent;
   overscroll-behavior: contain;
   /* Reserved whether or not the bar is showing, so a column does not reflow its text
      by six pixels the moment a list grows past the fold. Every pane still needs its
@@ -136,20 +164,24 @@ body {
   width: 6px;
 }
 .pane::-webkit-scrollbar-thumb {
-  background: var(--rule-strong);
+  background: color-mix(in oklab, var(--lapis) 30%, var(--rule-strong));
   border-radius: 3px;
 }
 .pane::-webkit-scrollbar-track {
   background: transparent;
 }
 
+/* Section labels -- TODAY IN NEPAL, LATEST NOTICES, SOURCES. Every one of them is
+   the app naming a thing rather than quoting it, so the whole layer is lapis. It
+   was --faint before, which at this size cleared only 2.9:1 against paper; lapis
+   clears 9.8:1, so the label layer got its colour and its contrast in one move. */
 .eyebrow {
   font-family: var(--font-mono);
   font-size: 0.6875rem;
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--faint);
+  color: var(--lapis);
 }
 
 /* ── Answer prose ──────────────────────────────────────────────────────────────
@@ -206,7 +238,8 @@ body {
   position: relative;
   padding-left: 0.9rem;
 }
-/* A rule, not a dot: the bullet echoes the hairlines used everywhere else. */
+/* A rule, not a dot: the bullet echoes the hairlines used everywhere else, in the
+   pigment of the app that drew it. */
 .answer ul > li::before {
   content: "";
   position: absolute;
@@ -214,7 +247,7 @@ body {
   top: 0.75em;
   width: 0.45rem;
   height: 1px;
-  background: var(--rule-strong);
+  background: var(--lapis);
 }
 .answer ol {
   list-style: decimal;
@@ -222,7 +255,7 @@ body {
 .answer ol > li::marker {
   font-family: var(--font-mono);
   font-size: 0.8em;
-  color: var(--faint);
+  color: var(--lapis);
 }
 .answer li + li {
   margin-top: 0.35em;
@@ -244,7 +277,9 @@ body {
 .answer code {
   font-family: var(--font-mono);
   font-size: 0.875em;
-  background: var(--crimson-soft);
+  /* Was crimson-soft, which quietly broke the rule above: a code span is not a
+     deadline. */
+  background: var(--lapis-soft);
   padding: 0.1em 0.35em;
   border-radius: 3px;
 }
@@ -263,7 +298,7 @@ body {
 }
 .answer blockquote {
   padding-left: 0.9rem;
-  border-left: 2px solid var(--rule-strong);
+  border-left: 2px solid var(--lapis);
   color: var(--mute);
 }
 .answer hr {
@@ -285,14 +320,19 @@ body {
   border-bottom: 1px solid var(--rule);
   vertical-align: top;
 }
+/* Column headings are the label layer again, so they take the same pigment. */
 .answer th {
   font-family: var(--font-mono);
   font-size: 0.6875rem;
   font-weight: 500;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--faint);
-  border-bottom-color: var(--rule-strong);
+  color: var(--lapis);
+  border-bottom-color: color-mix(
+    in oklab,
+    var(--lapis) 40%,
+    var(--rule-strong)
+  );
   white-space: nowrap;
 }
 .answer td:last-child,

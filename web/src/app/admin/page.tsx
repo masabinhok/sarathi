@@ -146,11 +146,11 @@ export default function Admin() {
               onChange={(event) => setEntry(event.target.value)}
               placeholder="Admin token"
               aria-label="Admin token"
-              className="border-rule focus:border-ink flex-1 rounded-[7px] border bg-transparent px-3 py-2.5 text-sm outline-none"
+              className="border-rule focus:border-lapis flex-1 rounded-[7px] border bg-transparent px-3 py-2.5 text-sm outline-none"
             />
             <button
               type="submit"
-              className="bg-ink text-paper rounded-[7px] px-4 py-2.5 text-sm font-medium"
+              className="bg-lapis text-paper rounded-[7px] px-4 py-2.5 text-sm font-medium"
             >
               Continue
             </button>
@@ -171,7 +171,7 @@ export default function Admin() {
           </h1>
           <button
             onClick={signOut}
-            className="text-faint hover:text-ink text-xs underline underline-offset-2"
+            className="text-faint hover:text-lapis text-xs underline underline-offset-2"
           >
             Forget token
           </button>
@@ -252,7 +252,7 @@ export default function Admin() {
                     return `Index rebuilt — ${result.chunks} chunks.`;
                   })
                 }
-                className="bg-ink text-paper rounded-[7px] px-3 py-1.5 text-xs font-medium transition disabled:opacity-40"
+                className="bg-lapis text-paper rounded-[7px] px-3 py-1.5 text-xs font-medium transition disabled:opacity-40"
               >
                 {busy === "reindex" ? "Rebuilding…" : "Rebuild index"}
               </button>

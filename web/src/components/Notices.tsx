@@ -5,9 +5,13 @@ import Dateline from "@/components/Dateline";
 import Skeleton from "@/components/Skeleton";
 import { fetchNotices, type NoticeFeed } from "@/lib/api";
 
-const SOURCE_ORDER = ["entrance", "ioe", "tu", "pcampus"];
+// Fixed rather than taken from the feed so the chips read in a stable order --
+// the boards first, then the campuses. A source missing from this list would be
+// listed in the index but not filterable, so it must be extended alongside
+// SOURCES in src/ioe/notices.py.
+const SOURCE_ORDER = ["entrance", "ioe", "tu", "pcampus", "wrc", "ioepc"];
 
-/** The full notice index: everything the four sites have published, newest first.
+/** The full notice index: everything the sites have published, newest first.
  *  Search and source filtering live here rather than in the rail, because this is the
  *  page somebody hunting for a particular notice actually opens. */
 export default function Notices() {
@@ -59,10 +63,12 @@ export default function Notices() {
           type="search"
           className="text-ink placeholder:text-faint min-w-0 flex-1 bg-transparent text-[0.9375rem] outline-none"
         />
-        {/* A flex item defaults to min-width:auto, so without min-w-0 the filter
-            row would widen the page instead of scrolling inside itself. */}
+        {/* Always its own line, never beside the search field. Six sources already
+            squeeze the field to four characters at 1440, and the list only grows.
+            A flex item defaults to min-width:auto, so without min-w-0 the row would
+            widen the page instead of scrolling inside itself. */}
         {sources.length > 1 && (
-          <div className="no-scrollbar flex w-full min-w-0 gap-4 overflow-x-auto text-[0.75rem] sm:w-auto">
+          <div className="no-scrollbar flex w-full min-w-0 gap-4 overflow-x-auto text-[0.75rem]">
             {["all", ...sources].map((key) => {
               const label =
                 key === "all" ? "All" : (feed?.sources[key]?.label ?? key);
@@ -74,7 +80,7 @@ export default function Notices() {
                   aria-pressed={active}
                   className={`shrink-0 whitespace-nowrap transition ${
                     active
-                      ? "text-ink border-ink border-b"
+                      ? "text-lapis border-lapis border-b"
                       : "text-mute hover:text-ink border-b border-transparent"
                   }`}
                 >
@@ -111,7 +117,7 @@ export default function Notices() {
                   className="mt-1"
                 />
                 <div className="min-w-0 flex-1">
-                  <h2 className="font-display group-hover:decoration-rule-strong text-[1.0625rem] leading-snug font-medium underline decoration-transparent underline-offset-[3px] transition">
+                  <h2 className="font-display group-hover:decoration-lapis text-[1.0625rem] leading-snug font-medium underline decoration-transparent underline-offset-[3px] transition">
                     {notice.title}
                   </h2>
                   <p className="text-faint mt-1.5 text-[0.75rem]">

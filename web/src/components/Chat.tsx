@@ -253,10 +253,13 @@ export default function Chat({
                 <li key={chip} className="border-rule border-b first:border-t">
                   <button
                     onClick={() => ask(chip)}
-                    className="group text-mute hover:text-ink flex w-full items-center gap-3 py-3 text-left text-[0.9375rem] transition"
+                    className="group text-mute hover:text-lapis flex w-full items-center gap-3 py-3 text-left text-[0.9375rem] transition"
                   >
                     <span className="flex-1">{chip}</span>
-                    <span className="text-faint group-hover:text-ink transition">
+                    {/* The arrow is part of the control, so it carries the
+                        control's colour even at rest -- four small marks that
+                        keep the middle column from opening entirely in grey. */}
+                    <span className="text-lapis/45 group-hover:text-lapis transition">
                       →
                     </span>
                   </button>
@@ -283,7 +286,7 @@ export default function Chat({
                   {message.content ? (
                     <Markdown text={message.content} streaming={waiting} />
                   ) : (
-                    <p className="text-faint animate-pulse text-[0.9375rem]">
+                    <p className="text-lapis animate-pulse text-[0.9375rem]">
                       Reading the notices…
                     </p>
                   )}
@@ -323,13 +326,13 @@ export default function Chat({
             <button
               type="button"
               onClick={jumpToLatest}
-              className="border-rule bg-card text-mute hover:text-ink hover:border-rule-strong rounded-full border px-3 py-1 text-[0.75rem] transition"
+              className="border-rule bg-card text-mute hover:text-lapis hover:border-lapis rounded-full border px-3 py-1 text-[0.75rem] transition"
             >
               Jump to the answer ↓
             </button>
           </div>
         )}
-        <div className="border-rule-strong focus-within:border-ink bg-card flex items-center gap-2 rounded-[10px] border px-3.5 py-2.5 transition">
+        <div className="border-rule-strong focus-within:border-lapis bg-card flex items-center gap-2 rounded-[10px] border px-3.5 py-2.5 transition">
           <input
             value={input}
             onChange={(event) => setInput(event.target.value)}
@@ -367,7 +370,7 @@ export default function Chat({
           <button
             onClick={onNew}
             type="button"
-            className="text-faint hover:text-ink mt-2.5 text-[0.75rem] transition"
+            className="text-faint hover:text-lapis mt-2.5 text-[0.75rem] transition"
           >
             Start a new conversation
           </button>

@@ -16,8 +16,9 @@ export default function NoticesPage() {
         </h1>
         <p className="text-mute mt-4 max-w-[46ch] text-[0.9375rem] leading-relaxed">
           Collected from the Entrance Exam Board, the Institute of Engineering,
-          Tribhuvan University and Pulchowk Campus. Links open the original
-          notice on the site that published it.
+          Tribhuvan University, and the Pulchowk, Pashchimanchal and Purwanchal
+          campuses. Links open the original notice on the site that published
+          it.
         </p>
 
         {/* Grid children default to min-width:auto, so without min-w-0 the widest

@@ -15,7 +15,9 @@ import { handOver } from "@/lib/handoff";
  *
  * Every question in this world reduces to "what day is it, and what have I already
  * missed", so the page opens with today in both calendars and the single date that
- * matters most right now. Crimson appears only if that date has passed.
+ * matters most right now. The date is set in lapis at four and a half rem, which is
+ * the dateline at its largest and the loudest the app's own colour ever gets.
+ * Crimson appears only if that date has passed.
  */
 export default function Hero() {
   const router = useRouter();
@@ -49,18 +51,18 @@ export default function Hero() {
         {/* The slot keeps its height before the date arrives, so the page does
             not open on a hole where the largest thing on it is about to be. */}
         <div className="font-mono leading-[0.95] tabular-nums">
-          <div className="text-[clamp(2.75rem,8vw,4.5rem)] font-medium tracking-[-0.03em]">
+          <div className="text-lapis text-[clamp(2.75rem,8vw,4.5rem)] font-medium tracking-[-0.03em]">
             {today ? (
               today.bs_date
             ) : (
-              <span className="bg-rule inline-block h-[0.72em] w-[6.2ch] animate-pulse rounded-xs align-baseline" />
+              <span className="bg-lapis-soft inline-block h-[0.72em] w-[6.2ch] animate-pulse rounded-xs align-baseline" />
             )}
           </div>
-          <div className="border-rule-strong text-faint mt-2 border-t pt-2 text-[clamp(1rem,2.5vw,1.5rem)]">
+          <div className="border-lapis/35 text-faint mt-2 border-t pt-2 text-[clamp(1rem,2.5vw,1.5rem)]">
             {today ? (
               today.ad_date
             ) : (
-              <span className="bg-rule inline-block h-[0.72em] w-[6.2ch] animate-pulse rounded-xs align-baseline" />
+              <span className="bg-lapis-soft inline-block h-[0.72em] w-[6.2ch] animate-pulse rounded-xs align-baseline" />
             )}
           </div>
         </div>
@@ -108,7 +110,7 @@ export default function Hero() {
         }}
         className="mt-8 max-w-[36rem]"
       >
-        <div className="border-rule-strong focus-within:border-ink bg-card flex items-center gap-2 rounded-[10px] border px-4 py-3 transition">
+        <div className="border-rule-strong focus-within:border-lapis bg-card flex items-center gap-2 rounded-[10px] border px-4 py-3 transition">
           <input
             value={question}
             onChange={(event) => setQuestion(event.target.value)}

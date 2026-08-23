@@ -61,7 +61,7 @@ export default function Deadlines() {
 
   return (
     <section aria-label="Key dates" className="text-[0.8125rem]">
-      <h2 className="eyebrow border-ink border-b pb-2">Key dates</h2>
+      <h2 className="eyebrow border-lapis border-b pb-2">Key dates</h2>
 
       {!feed ? (
         <p className="text-faint py-4 text-[0.75rem]">Loading…</p>

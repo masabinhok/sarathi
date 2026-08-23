@@ -17,7 +17,7 @@ export default function Footer() {
               href="https://entrance.ioe.edu.np"
               target="_blank"
               rel="noreferrer noopener"
-              className="text-ink decoration-rule-strong hover:decoration-current underline underline-offset-2"
+              className="text-lapis decoration-lapis/40 hover:decoration-lapis underline underline-offset-2"
             >
               entrance.ioe.edu.np
             </a>{" "}
@@ -26,13 +26,13 @@ export default function Footer() {
         </div>
 
         <div className="flex flex-col gap-1.5 sm:ml-auto">
-          <Link href="/about" className="hover:text-ink transition">
+          <Link href="/about" className="hover:text-lapis transition">
             About and goals
           </Link>
-          <Link href="/notices" className="hover:text-ink transition">
+          <Link href="/notices" className="hover:text-lapis transition">
             All notices
           </Link>
-          <Link href="/admin" className="hover:text-ink transition">
+          <Link href="/admin" className="hover:text-lapis transition">
             Admin
           </Link>
         </div>

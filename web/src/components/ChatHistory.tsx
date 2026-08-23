@@ -36,8 +36,8 @@ type Props = {
  * Titles are written by the model from the opening question, so this column reads as a
  * list of subjects — "eSewa payment process" — rather than a list of sentences the
  * student would have to re-read to tell apart. The conversation that is open is marked
- * with a rule in ink, not in crimson: crimson means a date with a consequence, and an
- * open conversation is not one.
+ * in lapis -- a rule down its left and a wash behind it -- never in crimson: crimson
+ * means a date with a consequence, and an open conversation is not one.
  */
 export default function ChatHistory({
   threads,
@@ -54,11 +54,11 @@ export default function ChatHistory({
           so the active row is announced by a change of colour rather than by a shift
           of the text beside it. */}
       {!bare && (
-        <div className="border-ink flex items-baseline gap-3 border-b pb-2 pl-3">
+        <div className="border-lapis flex items-baseline gap-3 border-b pb-2 pl-3">
           <h2 className="eyebrow">Conversations</h2>
           <button
             onClick={onNew}
-            className="text-mute hover:text-ink ml-auto text-[0.6875rem] transition"
+            className="text-mute hover:text-lapis ml-auto text-[0.6875rem] transition"
           >
             + New
           </button>
@@ -80,7 +80,9 @@ export default function ChatHistory({
               <li
                 key={thread.thread_id}
                 className={`border-rule group relative border-b border-l-2 pl-3 ${
-                  active ? "border-l-lapis" : "border-l-transparent"
+                  active
+                    ? "border-l-lapis bg-lapis-soft"
+                    : "border-l-transparent"
                 }`}
               >
                 <button
@@ -91,7 +93,7 @@ export default function ChatHistory({
                 >
                   <span
                     className={`font-display block text-[0.875rem] leading-snug font-medium ${
-                      active ? "text-ink" : "text-mute group-hover:text-ink"
+                      active ? "text-lapis" : "text-mute group-hover:text-ink"
                     } transition`}
                   >
                     {thread.title}

@@ -36,7 +36,7 @@ export default function Sources({ sources }: { sources: Source[] }) {
               key={source.file}
               className="grid grid-cols-[1.75rem_1fr] items-baseline text-[0.8125rem] leading-snug"
             >
-              <span className="font-mono text-faint text-[0.6875rem] tabular-nums">
+              <span className="text-lapis font-mono text-[0.6875rem] tabular-nums">
                 {String(i + 1).padStart(2, "0")}
               </span>
               <span className="min-w-0">

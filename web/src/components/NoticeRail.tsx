@@ -29,11 +29,11 @@ export default function NoticeRail() {
 
   return (
     <aside aria-label="Latest notices" className="text-[0.8125rem]">
-      <div className="border-ink flex items-baseline gap-3 border-b pb-2">
+      <div className="border-lapis flex items-baseline gap-3 border-b pb-2">
         <h2 className="eyebrow">Latest notices</h2>
         <Link
           href="/notices"
-          className="text-mute hover:text-ink ml-auto text-[0.6875rem] transition"
+          className="text-mute hover:text-lapis ml-auto text-[0.6875rem] transition"
         >
           All →
         </Link>
@@ -58,7 +58,7 @@ export default function NoticeRail() {
                 style={{ animationDelay: `${i * 35}ms` }}
               >
                 <Dateline bs={notice.bs_date} ad={notice.date} />
-                <h3 className="font-display group-hover:decoration-rule-strong mt-2 text-[0.9375rem] leading-snug font-medium underline decoration-transparent underline-offset-2 transition">
+                <h3 className="font-display group-hover:decoration-lapis mt-2 text-[0.9375rem] leading-snug font-medium underline decoration-transparent underline-offset-2 transition">
                   {notice.title}
                 </h3>
                 <p className="text-faint mt-1 text-[0.6875rem]">

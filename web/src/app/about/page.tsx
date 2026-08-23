@@ -18,7 +18,7 @@ const GOALS = [
   },
   {
     title: "Collect what the campuses publish",
-    body: "IOE, TU, the Entrance Exam Board and Pulchowk Campus each publish notices on their own site. Sarathi gathers them into one reverse-chronological index, so a student checks one page instead of four.",
+    body: "IOE, TU, the Entrance Exam Board and the Pulchowk, Pashchimanchal and Purwanchal campuses each publish notices on their own site. Sarathi gathers them into one reverse-chronological index, so a student checks one page instead of six.",
   },
 ];
 
@@ -40,13 +40,13 @@ export default function AboutPage() {
           Every year, students miss deadlines that were published correctly.
         </h1>
         <p className="text-mute mt-6 max-w-[38rem] text-[1.0625rem] leading-relaxed">
-          The notices go up on four different websites, mostly in Nepali, mostly
+          The notices go up on six different websites, mostly in Nepali, mostly
           as scanned PDFs, dated in a calendar you then have to convert. Nothing
           about that is anyone&apos;s fault, and all of it is avoidable. Sarathi
           reads the notices so a student doesn&apos;t have to hunt for them.
         </p>
 
-        <h2 className="font-display border-ink mt-16 border-b pb-2 text-[1.5rem] font-medium">
+        <h2 className="font-display border-lapis mt-16 border-b pb-2 text-[1.5rem] font-medium">
           What it sets out to do
         </h2>
         <ul className="mt-2">
@@ -62,7 +62,7 @@ export default function AboutPage() {
           ))}
         </ul>
 
-        <h2 className="font-display border-ink mt-16 border-b pb-2 text-[1.5rem] font-medium">
+        <h2 className="font-display border-lapis mt-16 border-b pb-2 text-[1.5rem] font-medium">
           What it will not do
         </h2>
         <ul className="mt-2">
@@ -76,7 +76,7 @@ export default function AboutPage() {
           ))}
         </ul>
 
-        <h2 className="font-display border-ink mt-16 border-b pb-2 text-[1.5rem] font-medium">
+        <h2 className="font-display border-lapis mt-16 border-b pb-2 text-[1.5rem] font-medium">
           How it is built
         </h2>
         <p className="text-mute mt-6 text-[0.9375rem] leading-relaxed">

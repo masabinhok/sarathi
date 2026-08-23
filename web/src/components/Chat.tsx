@@ -341,7 +341,7 @@ export default function Chat({
             type="submit"
             disabled={streaming || !input.trim()}
             aria-label="Ask"
-            className="bg-ink text-paper grid size-8 shrink-0 place-items-center rounded-[7px] transition disabled:opacity-25"
+            className="bg-lapis text-paper grid size-8 shrink-0 place-items-center rounded-[7px] transition disabled:opacity-25"
           >
             {streaming ? (
               <span className="border-paper/40 border-t-paper size-3 animate-spin rounded-full border-2" />

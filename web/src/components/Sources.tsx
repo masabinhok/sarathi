@@ -22,7 +22,7 @@ export default function Sources({ sources }: { sources: Source[] }) {
               href={source.url}
               target="_blank"
               rel="noreferrer noopener"
-              className="text-mute hover:text-ink decoration-rule-strong hover:decoration-ink underline underline-offset-2 transition"
+              className="text-lapis decoration-lapis/40 hover:decoration-lapis underline underline-offset-2 transition"
             >
               {source.title}
               <span aria-hidden> ↗</span>

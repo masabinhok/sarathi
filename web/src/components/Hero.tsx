@@ -119,7 +119,7 @@ export default function Hero() {
           <button
             type="submit"
             aria-label="Ask"
-            className="bg-ink text-paper grid size-8 shrink-0 place-items-center rounded-[7px] transition"
+            className="bg-lapis text-paper grid size-8 shrink-0 place-items-center rounded-[7px] transition"
           >
             <svg viewBox="0 0 24 24" className="size-4" fill="none" aria-hidden>
               <path

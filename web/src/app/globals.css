@@ -24,7 +24,14 @@
   --crimson: #9b1c2e;
   --crimson-soft: #f7edee;
 
-  --ring: color-mix(in oklab, var(--ink) 45%, transparent);
+  /* Lapis is the other half of that bargain: everything the reader can act on --
+     a link, the send button, the conversation they are in, whatever holds focus --
+     and nothing they cannot. Two pigments, two meanings, no overlap. The hue is
+     the blue of the flag, which is why it sits beside this particular crimson
+     without either one looking borrowed. */
+  --lapis: #1f3a93;
+
+  --ring: color-mix(in oklab, var(--lapis) 55%, transparent);
 }
 
 :root[data-theme="dark"] {
@@ -40,7 +47,10 @@
   --crimson: #e2687c;
   --crimson-soft: #2a1418;
 
-  --ring: color-mix(in oklab, var(--ink) 55%, transparent);
+  /* Lifted well past the light value: #1f3a93 on near-black is a hole in the page. */
+  --lapis: #8fa9f2;
+
+  --ring: color-mix(in oklab, var(--lapis) 70%, transparent);
 }
 
 @theme inline {
@@ -53,6 +63,7 @@
   --color-rule-strong: var(--rule-strong);
   --color-crimson: var(--crimson);
   --color-crimson-soft: var(--crimson-soft);
+  --color-lapis: var(--lapis);
 
   /* DM Sans carries no Devanagari; Nepali titles fall through to Plex Deva. */
   --font-sans: var(--font-dmsans), var(--font-deva), system-ui, sans-serif;
@@ -216,9 +227,9 @@ body {
   margin: 0.35em 0;
 }
 .answer a {
-  color: inherit;
+  color: var(--lapis);
   text-decoration: underline;
-  text-decoration-color: var(--rule-strong);
+  text-decoration-color: color-mix(in oklab, var(--lapis) 40%, transparent);
   text-underline-offset: 2px;
   transition: text-decoration-color 0.15s;
 }

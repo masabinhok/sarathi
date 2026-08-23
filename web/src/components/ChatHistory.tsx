@@ -80,7 +80,7 @@ export default function ChatHistory({
               <li
                 key={thread.thread_id}
                 className={`border-rule group relative border-b border-l-2 pl-3 ${
-                  active ? "border-l-ink" : "border-l-transparent"
+                  active ? "border-l-lapis" : "border-l-transparent"
                 }`}
               >
                 <button
@@ -102,9 +102,9 @@ export default function ChatHistory({
                   </span>
                 </button>
                 {/* Only reachable on hover or by keyboard, so a column being scanned
-                    is not also a column of delete buttons. Not crimson on hover
-                    either: crimson in this design means a date with a consequence,
-                    and nothing else is allowed to borrow the alarm. */}
+                    is not also a column of delete buttons. Neither crimson nor lapis
+                    on hover: crimson means a date with a consequence, lapis means the
+                    conversation you are in, and deleting one is neither. */}
                 <button
                   onClick={() => onDelete(thread.thread_id)}
                   aria-label={`Delete conversation: ${thread.title}`}

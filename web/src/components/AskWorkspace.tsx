@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Chat from "@/components/Chat";
 import ChatHistory from "@/components/ChatHistory";
 import NoticeRail from "@/components/NoticeRail";
 import { deleteThread, fetchThreads, type Thread } from "@/lib/api";
+import { showThreadInUrl, takeHandoff, threadFromUrl } from "@/lib/handoff";
 
 const THREAD_KEY = "ioe.thread_id";
 
@@ -21,17 +22,26 @@ const THREAD_KEY = "ioe.thread_id";
  * Below xl that would trap a phone in a 14rem column, so the layout collapses back to
  * one ordinary scrolling page with the history behind a toggle.
  */
-export default function AskWorkspace({ initial = "" }: { initial?: string }) {
+export default function AskWorkspace() {
   const [threads, setThreads] = useState<Thread[] | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [streaming, setStreaming] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [pending, setPending] = useState("");
+  // Held in a ref, not read again from session storage: the effect below runs twice in
+  // development, and the second run would find the question already taken and lose it.
+  const handed = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     let live = true;
+    if (handed.current === undefined) handed.current = takeHandoff();
+    const question = handed.current;
     // A question carried over from the landing page opens its own conversation; the one
     // this browser was last in stays in the sidebar rather than being appended to.
-    const saved = initial ? null : localStorage.getItem(THREAD_KEY);
+    // Otherwise the address names the conversation, and failing that the last one read.
+    const saved = question
+      ? null
+      : (threadFromUrl() ?? localStorage.getItem(THREAD_KEY));
 
     fetchThreads()
       .then((value) => {
@@ -44,14 +54,29 @@ export default function AskWorkspace({ initial = "" }: { initial?: string }) {
           setActiveId(saved);
         } else if (saved) {
           localStorage.removeItem(THREAD_KEY);
+          showThreadInUrl(null);
         }
+        setPending(question);
       })
-      .catch(() => live && setThreads([]));
+      .catch(() => {
+        if (!live) return;
+        setThreads([]);
+        setPending(question);
+      });
 
     return () => {
       live = false;
     };
-  }, [initial]);
+  }, []);
+
+  // The address follows the conversation, so a refresh reopens the transcript from the
+  // server instead of replaying whatever the URL used to carry. Held back until the
+  // listing has arrived, since until then the conversation the address names is exactly
+  // what is being looked up.
+  useEffect(() => {
+    if (threads === null) return;
+    showThreadInUrl(activeId);
+  }, [activeId, threads]);
 
   const remember = useCallback((threadId: string | null) => {
     setActiveId(threadId);
@@ -166,7 +191,7 @@ export default function AskWorkspace({ initial = "" }: { initial?: string }) {
 
       <div className="pane flex min-h-0 min-w-0 flex-col xl:overflow-y-auto xl:px-9">
         <Chat
-          initial={initial}
+          initial={pending}
           threadId={activeId}
           onThread={remember}
           onActivity={touch}

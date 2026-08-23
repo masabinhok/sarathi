@@ -8,6 +8,7 @@ import {
   type Deadline,
   type Today,
 } from "@/lib/api";
+import { handOver } from "@/lib/handoff";
 
 /**
  * The hero is not a value proposition — it is the dateline at its largest.
@@ -100,7 +101,10 @@ export default function Hero() {
         onSubmit={(event) => {
           event.preventDefault();
           const text = question.trim();
-          router.push(text ? `/ask?q=${encodeURIComponent(text)}` : "/ask");
+          // Handed over out of band, not as `?q=`: a question in the address bar is
+          // asked again on every refresh, and opens a new conversation each time.
+          if (text) handOver(text);
+          router.push("/ask");
         }}
         className="mt-8 max-w-[36rem]"
       >

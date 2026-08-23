@@ -126,6 +126,11 @@ body {
   scrollbar-width: thin;
   scrollbar-color: var(--rule-strong) transparent;
   overscroll-behavior: contain;
+  /* Reserved whether or not the bar is showing, so a column does not reflow its text
+     by six pixels the moment a list grows past the fold. Every pane still needs its
+     own right padding on top of this: the gutter is where the bar sits, not a gap
+     between the bar and the words. */
+  scrollbar-gutter: stable;
 }
 .pane::-webkit-scrollbar {
   width: 6px;

@@ -27,7 +27,43 @@ If you need this information for a specific application or process, it's always 
 10. play around with the bot for flaws and fix it.
 11. [FIXED] add a chat history on the left sidebar, make all three divs seperatly scrollabale, chat, notices and chat-history !
 12. [FIXED] include valid citations only, citations for relevant questions and not for out of scope questions, not necessary to mention 4 sources always, just mention where its from.
-13. should we add internet search tool? if added what should it use internet for, because we have to provide relevant information from our own docuemnt chunks, what usefulness will a internet search tool have?
+13. [DECIDED] should we add internet search tool? if added what should it use internet for, because we have to provide relevant information from our own docuemnt chunks, what usefulness will a internet search tool have?
+
+    **No general web search. Yes to a notice-fetch tool over the sites we already scrape.**
+
+    Measured against the live bot on 2026-08-23:
+
+    - Asked "is there any new notice published this week", it answered "there is no new
+      official notice published specifically for this week" — while the rail beside it
+      was showing one published the day before. 35 notices in cache, newest 2026-08-22.
+      `notices.py` already scrapes 4 sites; `graph.py` simply cannot see the cache. Not
+      an internet gap.
+    - Asked the fee for BE Civil at Thapathali, it punted to a link. Section 9 of the
+      booklet answers it — the fee table is IOE-wide, not per-campus (Regular NPR
+      6,974/sem, 55,792 over 8 semesters). Search would have hidden a retrieval bug
+      behind a plausible web answer.
+    - Asked when Kathmandu University holds its entrance exam, it gave IOE's date as
+      KU's. Search would turn that from wrong-and-ungrounded into wrong-with-a-citation,
+      which is exactly what the citation gate in 12 exists to prevent.
+
+    So the tool to build is a fetch, not a search:
+
+    a. Index the *bodies* of the notices we already list, not just their titles. Bounded
+       set, known domains, authoritative. Closes the "no new notice" lie.
+    b. Sources to cover every constituent campus, not just Pulchowk — Thapathali,
+       Purwanchal, Pashchimanchal, Chitwan — since the question is about admission and
+       admission happens at all of them. More sources to be added over time.
+    c. Refresh on demand during a chat when the cache is stale, rather than waiting for
+       the daily cron: a student asking at 4pm about a list published at 2pm should get
+       it. Cron stays as the floor, the chat path can trigger a fetch above it.
+    d. A staleness guard: let the bot compare the newest notice against its own document
+       set and say "6 notices are newer than my documents, here they are" instead of
+       denying they exist.
+
+    Open web search stays out. The product's promise is that answers come from the
+    official notices; a general search tool dissolves that promise, and the honest
+    failure mode of a grounded bot ("I don't have that") is worth more than a confident
+    answer from a source nobody vetted.
 14. [FIXED] there is a bug, whenever i refresh, the latest query reruns again. its because user query is passed through search params, which is why! it's not the case in major chatbots, how do they handles this, and can we move to that system to fix this bug! also creating new chat history every time i refresh for the same question.
 15. [FIXED] i kinda don't like the current 3 layout strcutre, we can expand the chat window a little and push the notiecs to right, and without the limiting right border.(the left margin is the sweet spot, we should expand the second layer so that, the right margin equals left margin for the outer container that contains three layers(chatbot, history and notices, and remove the right border from the notices))
 16. [FIXED] Let's add one theme color, it looks so off with just black and white

@@ -203,7 +203,7 @@ export default function AskWorkspace() {
 
       {/* No rule down its left: the conversation is given the room to the right of it
           rather than being boxed in, and the rail reads as the far edge of the page. */}
-      <div className="border-rule pane min-h-0 border-t pt-8 pb-10 xl:border-t-0 xl:pt-8 xl:pl-8 xl:overflow-y-auto">
+      <div className="border-rule pane min-h-0 border-t pt-8 pb-10 xl:border-t-0 xl:pt-8 xl:pr-3 xl:pl-8 xl:overflow-y-auto">
         <NoticeRail />
       </div>
     </main>

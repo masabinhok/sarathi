@@ -19,7 +19,13 @@ from ioe import threads as threads_mod
 from ioe.dates import today_payload
 from ioe.deadlines import as_payload as deadlines_payload
 from ioe.graph import TEXT_MODEL, get_chatbot
-from ioe.rag import DOCS_DIR, EMB_MODEL, build_index, load_documents
+from ioe.rag import (
+    DOCS_DIR,
+    EMB_MODEL,
+    build_index,
+    load_documents,
+    refresh_notice_index,
+)
 
 # Read .env before anything reads os.environ, so ADMIN_TOKEN can live in a file
 # rather than the shell that happens to launch uvicorn.
@@ -109,6 +115,10 @@ TITLE_TIMEOUT = 8.0
 
 async def _stream(message: str, thread_id: str, client_id: str) -> AsyncIterator[str]:
     yield _sse("start", {"thread_id": thread_id})
+
+    # Someone is here and asking, so make sure the notice feed is not a day old. This
+    # returns immediately; the fetch it may start runs behind the answer.
+    await _freshen_notices()
 
     # Naming happens on the first turn only, and the provisional name is written before
     # the answer starts: if the connection drops mid-stream the conversation is still in
@@ -238,6 +248,38 @@ async def chat(
     )
 
 
+# How stale the notice cache may be before a question triggers a fetch of its own. The
+# cron that refreshes it daily is the floor, not the only trigger: during admission week a
+# list published at 2pm should not be invisible to a student asking at 4pm.
+NOTICE_MAX_AGE = 20 * 60
+
+# One at a time, and never awaited by the turn that started it. Scraping six sites takes
+# seconds, and a student waiting on an answer should not be paying for it -- the fetch
+# lands in time for the next question, or for the next person to ask this one.
+_freshening: asyncio.Task | None = None
+
+
+def _refresh_notices() -> dict:
+    """Scrape the feed, then bring the indexed notice records in line with it."""
+    notices_mod.refresh()
+    refresh_notice_index()
+    # Re-read rather than use what refresh returned: indexing writes the record ids back.
+    return notices_mod.load()
+
+
+async def _freshen_notices() -> None:
+    """Start a background refresh if the cache has gone stale and none is running."""
+    global _freshening
+    try:
+        if _freshening and not _freshening.done():
+            return
+        if notices_mod.age_seconds() < NOTICE_MAX_AGE:
+            return
+        _freshening = asyncio.create_task(asyncio.to_thread(_refresh_notices))
+    except Exception:  # noqa: BLE001 - a stale notice feed must never fail an answer
+        _freshening = None
+
+
 # --- notices and deadlines -------------------------------------------------------------
 
 
@@ -358,9 +400,10 @@ async def reindex() -> dict:
 
 @app.post("/api/admin/notices/refresh", dependencies=[Depends(require_admin)])
 async def refresh_notices() -> dict:
-    payload = await asyncio.to_thread(notices_mod.refresh)
+    payload = await asyncio.to_thread(_refresh_notices)
     return {
         "updated_at": payload["updated_at"],
         "count": len(payload["notices"]),
+        "indexed": len(payload.get("indexed_ids") or []),
         "sources": payload["sources"],
     }

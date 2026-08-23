@@ -8,6 +8,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import MessagesState
 
 from ioe.dates import annotate_dates, today_context
+from ioe.notices import digest as notice_digest
 from ioe.rag import (
     MAX_SOURCES,
     OLLAMA_URL,
@@ -66,6 +67,21 @@ admission office. Do not fill the gap from memory.
 The interface prints the documents you were given underneath your answer, with links to \
 the official notices. Naming a source mid-sentence is still welcome; repeating the list \
 is not.
+
+Using the notice feed:
+- A "Notice feed" block below lists the most recent notices published on the official \
+sites, newest first. It is the only current record of what has been published; the \
+reference documents were prepared earlier and do not know about anything in it.
+- When a student asks whether something has been published, whether there is anything \
+new, or what the latest notice is, answer from this block. Give the title, the date in \
+both calendars, which campus or board published it, and a Markdown link.
+- Never tell a student that nothing has been published recently unless the block is \
+empty. If the block lists a notice, it exists.
+- The block gives titles, not contents. Never describe what a notice says, or state a \
+name, list, rank, date, or amount from it, on the strength of its title. Say what was \
+published and when, and link the student to it so they can read it.
+- A notice appearing here that the reference documents do not cover is normal and worth \
+saying plainly: the notice is newer than the documents.
 
 Dates:
 - A "Today's date" block below gives the current date in both calendars. Use it rather than guessing, and never state a date you were not given.
@@ -187,6 +203,13 @@ def chat_node(state: ChatState) -> dict:
     context = state.get("context")
 
     prompt = [SYSTEM_PROMPT, SystemMessage(content=today_context())]
+
+    # Always present, not only when a question looks time-sensitive. The failure this
+    # fixes was the assistant flatly denying that a notice existed, and a question does
+    # not have to mention notices to be answered that way.
+    feed = notice_digest()
+    if feed:
+        prompt.append(SystemMessage(content=feed))
 
     # Resolve BS dates from both the question and the retrieved text, so the model reads
     # off conversions instead of attempting calendar arithmetic it gets wrong.

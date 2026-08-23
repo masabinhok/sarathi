@@ -76,7 +76,12 @@ def load_documents() -> list[Document]:
 
 
 def build_index() -> int:
-    """Rebuild the vector store from scratch. Returns the number of chunks indexed."""
+    """Rebuild the vector store from scratch. Returns the number of chunks indexed.
+
+    Notice records go back in afterwards. Resetting the collection drops them along with
+    everything else, and a rebuild that leaves the assistant blind to the notice feed
+    until the next refresh is a rebuild that reintroduces the bug this was written for.
+    """
     chunks = load_documents()
 
     store = Chroma(
@@ -88,7 +93,96 @@ def build_index() -> int:
     store.reset_collection()
     if chunks:
         store.add_documents(chunks)
+    refresh_notice_index(rebuilt=True)
     return len(chunks)
+
+
+# Notice records live in the same collection as the documents, so one search covers both
+# and the citation machinery treats them identically. The id is the notice's URL, which
+# makes writing them an upsert and lets a notice that has dropped off the feed be removed
+# by id rather than by guesswork.
+NOTICE_ID = "notice::"
+
+
+def notice_documents(payload: dict) -> list[Document]:
+    """One short record per cached notice: what was published, by whom, and when.
+
+    The notice pages themselves are not indexed -- see the note in notices.py, they are
+    scanned PDFs behind a "Click Here" -- so a record does not claim to know what a notice
+    says. It knows that it exists and when, which is the question that was being answered
+    wrongly: asked whether anything had been published this week, the assistant used to
+    say no while the app displayed a notice from the day before.
+    """
+    docs: list[Document] = []
+    for notice in payload.get("notices", []):
+        title = (notice.get("title") or "").strip()
+        url = (notice.get("url") or "").strip()
+        if not title or not url:
+            continue
+        source = notice.get("source_label") or "IOE"
+        ad = notice.get("date") or ""
+        bs = notice.get("bs_date") or ""
+        when = f"{bs} BS ({ad} AD)" if bs and ad else (ad or bs or "an unstated date")
+        docs.append(
+            Document(
+                page_content=(
+                    f"Notice published by {source}: {title}\n"
+                    f"Publication date: {when}.\n"
+                    "This is a notice listing from the official feed. The notice itself "
+                    "is published as a document at the linked page."
+                ),
+                metadata={
+                    "kind": "notice",
+                    "title": title,
+                    "url": url,
+                    # source_payload groups citations by `file`; a notice is its own URL.
+                    "file": url,
+                    "year": bs.split("/")[0] if bs else "",
+                    "source": source,
+                    "date": ad,
+                },
+            )
+        )
+    return docs
+
+
+def index_notices(payload: dict, previous: list[str] | None = None) -> list[str]:
+    """Replace the indexed notice records with the ones in `payload`. Returns their ids.
+
+    Ids of notices that have rolled off the feed are deleted, so the index tracks the
+    listing rather than growing without bound.
+    """
+    docs = notice_documents(payload)
+    ids = [f"{NOTICE_ID}{doc.metadata['url']}" for doc in docs]
+    store = get_store()
+
+    gone = [i for i in (previous or []) if i not in set(ids)]
+    if gone:
+        # A reset collection has none of these; deleting what is not there is not an error
+        # worth failing a refresh over.
+        try:
+            store.delete(ids=gone)
+        except Exception:  # noqa: BLE001 - see above
+            gone = []
+    if docs:
+        store.add_documents(docs, ids=ids)
+    return ids
+
+
+def refresh_notice_index(rebuilt: bool = False) -> int:
+    """Bring the indexed notice records in line with the cache. Returns how many.
+
+    The ids written last time are kept in the notice cache beside the notices themselves,
+    so this knows what to remove without scanning the collection. After a full rebuild
+    there is nothing to remove -- the reset took everything with it.
+    """
+    from ioe import notices
+
+    payload = notices.load()
+    previous = [] if rebuilt else payload.get("indexed_ids") or []
+    ids = index_notices(payload, previous)
+    notices.remember_indexed(ids)
+    return len(ids)
 
 
 def get_store() -> Chroma:

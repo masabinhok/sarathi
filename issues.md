@@ -27,7 +27,7 @@ If you need this information for a specific application or process, it's always 
 10. play around with the bot for flaws and fix it.
 11. [FIXED] add a chat history on the left sidebar, make all three divs seperatly scrollabale, chat, notices and chat-history !
 12. [FIXED] include valid citations only, citations for relevant questions and not for out of scope questions, not necessary to mention 4 sources always, just mention where its from.
-13. [DECIDED] should we add internet search tool? if added what should it use internet for, because we have to provide relevant information from our own docuemnt chunks, what usefulness will a internet search tool have?
+13. [BUILT] should we add internet search tool? if added what should it use internet for, because we have to provide relevant information from our own docuemnt chunks, what usefulness will a internet search tool have?
 
     **No general web search. Yes to a notice-fetch tool over the sites we already scrape.**
 
@@ -64,8 +64,26 @@ If you need this information for a specific application or process, it's always 
     official notices; a general search tool dissolves that promise, and the honest
     failure mode of a grounded bot ("I don't have that") is worth more than a confident
     answer from a source nobody vetted.
+
+    **Built 2026-08-23.** One change to the plan, forced by measurement: (a) indexes the
+    notice *record* -- title, both dates, publisher, link -- not the notice page. Sampling
+    one page per source, every one was a heading over a scanned PDF; the richest held 209
+    characters, most of it "Click Here" and "in pdf format". Indexing that would have put
+    site chrome into the index to compete with the translated documents, at one HTTP
+    request per notice. Worth revisiting only if a source starts publishing real HTML.
+
+    Sources went from 4 to 6: added Pashchimanchal (wrc.edu.np) and Purwanchal
+    (ioepc.edu.np). Thapathali renders its notice list in the browser -- its served HTML
+    contains no notice at all -- so it needs a headless browser, which is not worth a
+    dependency yet. Chitwan publishes no feed and links to tu.edu.np, already a source.
+    Note that cec.edu.np is *not* Chitwan Engineering Campus; the campus is cec.tu.edu.np.
+
+    Result: 57 notices from 6 sources, 57 records indexed. "Is there any new notice this
+    week" now lists today's two with links instead of denying they exist.
 14. [FIXED] there is a bug, whenever i refresh, the latest query reruns again. its because user query is passed through search params, which is why! it's not the case in major chatbots, how do they handles this, and can we move to that system to fix this bug! also creating new chat history every time i refresh for the same question.
 15. [FIXED] i kinda don't like the current 3 layout strcutre, we can expand the chat window a little and push the notiecs to right, and without the limiting right border.(the left margin is the sweet spot, we should expand the second layer so that, the right margin equals left margin for the outer container that contains three layers(chatbot, history and notices, and remove the right border from the notices))
 16. [FIXED] Let's add one theme color, it looks so off with just black and white
 17. [FIXED] bug: when it's generating an answer, an i scroll up, it goes back to the answer streams, which is kinda bad ux. fix it!
 18. [FIXED] issue 17 fixed but created a new error: answer doesnot stream properly or not visible, becuase its stuck and the page doesnot auto scroll to bottom while the answer is generating, the user themself has to do it.
+19. when i asked it to speak in nepali, it started talking in hindi. so we should strictly make the bot speak in english only. it is incapable of speaking other languages properly. 
+20. the whole app still looks black and white, need to include the theme color more!!

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Markdown from "@/components/Markdown";
 import Sources from "@/components/Sources";
 import {
@@ -52,6 +52,10 @@ export default function Chat({
   // so the first run always loads, even when there is no thread to load.
   const shown = useRef<string | null | undefined>(undefined);
   const bottom = useRef<HTMLDivElement>(null);
+  // The composer is sticky, so its top edge -- not the foot of the viewport -- is where
+  // the readable part of the transcript actually ends. Both the follow scroll and the
+  // "are they still reading the end" test measure against it.
+  const composer = useRef<HTMLFormElement>(null);
   // Whether the reader is still following the end of the conversation. While they are,
   // new tokens scroll into view; the moment they scroll away to re-read something, they
   // are left where they put themselves.
@@ -92,9 +96,23 @@ export default function Chat({
 
   const empty = messages.length === 0;
 
-  // How far past the fold the end marker may sit and still count as "being read". Covers
-  // the composer, which is sticky and overlaps the last line of a long answer.
-  const SLACK = 120;
+  // Bring the end of the answer to rest just above the composer rather than level with
+  // the foot of the scrollport, where the composer's blur would sit over it. Expressed
+  // as a scroll margin so the browser does the arithmetic, and measured from the composer
+  // itself so it stays right however tall that grows.
+  const scrollToEnd = useCallback((smooth = false) => {
+    const marker = bottom.current;
+    if (!marker) return;
+    marker.style.scrollMarginBottom = `${composer.current?.offsetHeight ?? 0}px`;
+    marker.scrollIntoView({
+      block: "end",
+      behavior: smooth ? "smooth" : "auto",
+    });
+  }, []);
+
+  // How far below the composer the end marker may sit and still count as "being read" --
+  // enough to absorb a part-written line and sub-pixel rounding, not a whole paragraph.
+  const SLACK = 24;
 
   // Following is measured off the marker's position in the viewport, which is the one
   // measurement that holds at every width: above xl the conversation scrolls inside its
@@ -110,7 +128,9 @@ export default function Chat({
     const atEnd = () => {
       const marker = bottom.current;
       if (!marker) return true;
-      return marker.getBoundingClientRect().top <= window.innerHeight + SLACK;
+      const fold =
+        composer.current?.getBoundingClientRect().top ?? window.innerHeight;
+      return marker.getBoundingClientRect().top <= fold + SLACK;
     };
 
     const settle = () => {
@@ -140,16 +160,17 @@ export default function Chat({
     };
   }, [empty]);
 
+  // Not smooth: this runs once per token, and queued animations arrive behind the text
+  // that prompted them. Streaming is a dependency so the citations, which are appended
+  // after the last token, are followed down too.
   useEffect(() => {
-    // Not smooth: this runs once per token, and queued animations arrive behind the text
-    // that prompted them.
-    if (following.current) bottom.current?.scrollIntoView({ block: "end" });
-  }, [messages]);
+    if (following.current) scrollToEnd();
+  }, [messages, streaming, scrollToEnd]);
 
   function jumpToLatest() {
     following.current = true;
     setDetached(false);
-    bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    scrollToEnd(true);
   }
 
   async function ask(text: string) {
@@ -284,6 +305,7 @@ export default function Chat({
       </div>
 
       <form
+        ref={composer}
         onSubmit={(event) => {
           event.preventDefault();
           void ask(input.trim());

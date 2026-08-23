@@ -229,7 +229,10 @@ export default function Chat({
   }
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+    // Capped at a readable measure and left-aligned rather than centred in the column:
+    // the slack belongs between the conversation and the notice rail, not between the
+    // conversation and the history it sits against.
+    <div className="flex min-h-0 w-full max-w-[44rem] min-w-0 flex-1 flex-col">
       {/* Only a conversation in progress stretches to fill the column; an empty
           one would otherwise open with the composer stranded at the bottom. */}
       <div className={`pt-10 pb-6 ${empty ? "" : "flex-1"}`}>

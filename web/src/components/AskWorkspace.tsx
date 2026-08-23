@@ -153,7 +153,7 @@ export default function AskWorkspace() {
   );
 
   return (
-    <main className="mx-auto grid w-full max-w-[86rem] min-h-0 flex-1 grid-cols-1 px-5 sm:px-8 xl:grid-cols-[14rem_minmax(0,40rem)_16rem] xl:gap-0 xl:px-8">
+    <main className="mx-auto grid w-full max-w-[86rem] min-h-0 flex-1 grid-cols-1 px-5 sm:px-8 xl:grid-cols-[14rem_minmax(0,1fr)_17rem] xl:gap-0 xl:px-8">
       {/* On a phone the history is a disclosure, not a column: it is the thing you
           want occasionally, and the conversation is the thing you came for. Its bar
           doubles as the heading, so the list below it renders bare -- one
@@ -201,7 +201,9 @@ export default function AskWorkspace() {
         />
       </div>
 
-      <div className="pane border-rule min-h-0 border-t pt-8 pb-10 xl:border-t-0 xl:border-l xl:pt-8 xl:pl-6 xl:overflow-y-auto">
+      {/* No rule down its left: the conversation is given the room to the right of it
+          rather than being boxed in, and the rail reads as the far edge of the page. */}
+      <div className="border-rule pane min-h-0 border-t pt-8 pb-10 xl:border-t-0 xl:pt-8 xl:pl-8 xl:overflow-y-auto">
         <NoticeRail />
       </div>
     </main>

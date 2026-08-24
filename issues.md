@@ -20,7 +20,7 @@ the open list and take the next free number.
 | [9](#9--guide-the-bot-to-answer-smartly) | Guide the bot to answer smartly | prompt / graph |
 | [10](#10--play-with-the-bot-and-fix-what-breaks) | Play with the bot and fix what breaks | prompt / graph |
 
-### Closed — 16
+### Closed — 17
 
 | # | Issue | Status |
 | --- | --- | --- |
@@ -40,6 +40,7 @@ the open list and take the next free number.
 | [18](#18--fixed--the-streaming-answer-hides-under-the-composer) | The streaming answer hides under the composer | `FIXED` |
 | [19](#19--fixed--it-answers-in-hindi-when-asked-for-nepali) | It answers in Hindi when asked for Nepali | `FIXED` |
 | [20](#20--fixed--the-theme-colour-barely-shows) | The theme colour barely shows | `FIXED` |
+| [21](#21--fixed--the-pass-list-lookup-only-took-a-form-number-or-a-rank) | The pass list lookup only took a form number or a rank | `FIXED` |
 
 ---
 
@@ -291,3 +292,58 @@ Two things fell out of it. Eyebrows were `--faint`, which cleared 2.9:1 against 
 and failed AA at that size; lapis clears 9.8:1. And inline `code` had been sitting on
 `--crimson-soft`, which had quietly broken the rule since 16 — a code span is not a
 deadline.
+
+## 21 · `FIXED` · The pass list lookup only took a form number or a rank
+
+make the rank, result look up more advanced with name, districts, for e.g is sabin
+shrestha on the list, what rank did he scored, or just first name or just last name,
+or just district,
+
+Same discipline as 1 and 2, extended to messier input. A form number or a rank is a key
+into an exact index; a name is not — "Sabin Shrestha" turned out not to be on the list at
+all, "Shrestha" alone matches 357 of the 7,179 rows, and Nepali names run two to four
+words with no reliable split into first/last. So the match is built the same way
+`_FORM_RE`/`_RANK_RE` already are: not "does this look like a name", but "is this word or
+phrase one a real, published candidate actually has" — the vocabulary is the CSV's own
+name and district columns, not a guess at what a name looks like.
+
+Three things had to be caught before this was honest rather than just plausible:
+
+- **A stray common word must not false-trigger a name lookup.** Three real first/last
+  names on the list — "Raj", "Dev", "Bal" — are also common enough outside it to fire on
+  unrelated text, so single-word matching requires 4+ letters. "Nepali" is a real surname
+  (11 candidates) and also the one word this app's own language handling (`19`) makes
+  students type constantly and unrelatedly; excluded by name, those 11 stay reachable by
+  full name, form number, or rank.
+- **Two name words in one question must not read as two unrelated lookups.** "Is Sabin
+  Shrestha on the list" matches no full name, so it falls to single-word matching — 15
+  Sabins, 357 Shresthas, reported separately that's noise. Fixed to intersect: is there a
+  candidate with *both* words? Here, no — and the correct answer is one clean "not found",
+  not two "too many to list"s that leave the model to guess whether they overlap.
+- **"Who topped from Mustang" must not also answer with the global rank 1.** The topper
+  heuristic from issue 1 fires on the word "topped" regardless of context; qualified by a
+  district it's a different question the district block already answers correctly, and
+  showing both risked the model conflating the global topper with the district's. Now the
+  topper heuristic turns itself off whenever a district is also named; an explicit numeral
+  ("rank 1") is unaffected either way.
+
+A bare district mention alone doesn't trigger a lookup — "does someone from Kathmandu need
+extra documents for the quota" isn't a pass-list question, and dumping 692 names on it
+would answer a question nobody asked. It only fires alongside a result-shaped word
+("pass", "rank", "topper", "candidate", "list", ...), the same anchoring `_BARE_RE` already
+uses for a bare form number.
+
+Ambiguity is reported, never resolved by guessing — extending the rule issue 1 exists for.
+Several candidates sharing a name are listed (capped at 8, with the true count stated) and
+the model is told explicitly not to pick one. A district lookup names only its five
+best-ranked candidates and says so, never implying they're the whole list. And a name that
+matches but not the district given back gets its own honest answer — "on the list, but not
+from Kathmandu" — rather than a flat "not found" that would wrongly suggest the candidate
+never sat the exam at all.
+
+Verified against the live bot: a real non-existent "Sabin Shrestha" correctly reported
+absent; a unique name resolved directly to its rank; 357 Shresthas and 5 Aayush Adhikaris
+both correctly refused with a request to narrow down; the Kathmandu topper answered
+correctly with the subset caveat stated; a real candidate (Prabesh Giri) asked about under
+the wrong district (Kathmandu instead of Chitawan) got the honest mismatch answer instead
+of a false negative; and the Kathmandu-quota and eSewa control questions were unaffected.

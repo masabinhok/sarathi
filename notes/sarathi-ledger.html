@@ -1,0 +1,628 @@
+<title>The Sarathi Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,440;9..144,560;9..144,650&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  /* ── Tokens ─────────────────────────────────────────────────────────────────
+     A ledger, not a landing page: aged-paper neutrals rather than either cliché
+     cream+terracotta or near-black+neon, and two accents that are not decoration
+     but the story's own structure -- amber marks a measured failure ("what the
+     model actually said"), teal marks the deterministic fix that replaced it.
+     Everything else in the page is ink, mute, and hairline. */
+  :root {
+    --paper: #ede9df;
+    --card: #f6f3eb;
+    --ink: #211d17;
+    --mute: #6e645a;
+    --faint: #9c9284;
+    --rule: #d6cdb9;
+    --rule-strong: #c4b89f;
+
+    --amber: #8a5a0c;
+    --amber-soft: #f1e4cb;
+    --teal: #155850;
+    --teal-soft: #dcebe8;
+
+    --font-display: "Fraunces", Georgia, serif;
+    --font-body: "Public Sans", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #171410;
+      --card: #1f1b14;
+      --ink: #efe8d9;
+      --mute: #a69c8c;
+      --faint: #766c5c;
+      --rule: #332d22;
+      --rule-strong: #453d2c;
+
+      --amber: #e3a34c;
+      --amber-soft: #2e2413;
+      --teal: #63b8ac;
+      --teal-soft: #16302c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #171410;
+    --card: #1f1b14;
+    --ink: #efe8d9;
+    --mute: #a69c8c;
+    --faint: #766c5c;
+    --rule: #332d22;
+    --rule-strong: #453d2c;
+
+    --amber: #e3a34c;
+    --amber-soft: #2e2413;
+    --teal: #63b8ac;
+    --teal-soft: #16302c;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 1.0625rem;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+  }
+
+  a { color: var(--teal); text-decoration-color: color-mix(in oklab, var(--teal) 40%, transparent); text-underline-offset: 2px; }
+  a:hover { text-decoration-color: currentColor; }
+  :where(a, button, [tabindex]):focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; border-radius: 2px; }
+
+  .wrap { max-width: 44rem; margin: 0 auto; padding: 0 1.5rem; }
+
+  /* ── Masthead ─────────────────────────────────────────────────────────── */
+  .masthead { padding: 5rem 0 3.5rem; }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--amber);
+  }
+  h1.title {
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
+    font-weight: 650;
+    font-size: clamp(2.6rem, 7vw, 4rem);
+    line-height: 1.02;
+    letter-spacing: -0.015em;
+    margin: 0.6rem 0 0;
+    text-wrap: balance;
+  }
+  .dek {
+    font-size: 1.1875rem;
+    color: var(--mute);
+    max-width: 34rem;
+    margin: 1.4rem 0 0;
+    line-height: 1.6;
+  }
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.6rem;
+    margin-top: 2.2rem;
+    padding-top: 1.4rem;
+    border-top: 1px solid var(--rule);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--faint);
+  }
+  .meta-row b { color: var(--ink); font-weight: 500; }
+
+  /* ── Table of contents ────────────────────────────────────────────────── */
+  .toc {
+    margin: 0 0 4rem;
+    padding: 1.6rem 1.8rem;
+    background: var(--card);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+  }
+  .toc-label {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin: 0 0 0.9rem;
+  }
+  .toc ol { list-style: none; margin: 0; padding: 0; columns: 2; column-gap: 2rem; }
+  .toc li { break-inside: avoid; margin-bottom: 0.55rem; }
+  .toc a {
+    color: var(--ink);
+    text-decoration: none;
+    font-size: 0.9375rem;
+    display: flex;
+    gap: 0.6rem;
+  }
+  .toc a:hover { color: var(--teal); }
+  .toc a .n {
+    font-family: var(--font-mono);
+    color: var(--faint);
+    font-size: 0.8125rem;
+    flex-shrink: 0;
+  }
+
+  /* ── The spine: chapters run down a numbered ledger column ──────────────
+     A continuous rule down the number column so the whole document reads as
+     one running account, the way the actual issue tracker this is drawn from
+     numbers every entry and never renumbers a closed one. */
+  .spine { position: relative; padding-bottom: 2rem; }
+  .spine::before {
+    content: "";
+    position: absolute;
+    left: 1.35rem;
+    top: 0.3rem;
+    bottom: 0;
+    width: 1px;
+    background: var(--rule);
+  }
+
+  .chapter { position: relative; padding: 3.4rem 0 0 4.2rem; scroll-margin-top: 2rem; }
+  .chapter:first-child { padding-top: 0.5rem; }
+  .chapter .num {
+    position: absolute;
+    left: 0;
+    top: 3.6rem;
+    width: 2.7rem;
+    height: 2.7rem;
+    border-radius: 50%;
+    background: var(--paper);
+    border: 1px solid var(--rule-strong);
+    display: grid;
+    place-items: center;
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    color: var(--mute);
+  }
+  .chapter:first-child .num { top: 0.5rem; }
+  .chapter h2 {
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
+    font-weight: 600;
+    font-size: clamp(1.5rem, 3.4vw, 1.875rem);
+    line-height: 1.18;
+    letter-spacing: -0.01em;
+    margin: 0 0 1.1rem;
+    text-wrap: balance;
+  }
+  .chapter .tag {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin: 0 0 0.5rem;
+  }
+  .chapter p { margin: 0 0 1.05rem; max-width: 38rem; }
+  .chapter p:last-child { margin-bottom: 0; }
+  .chapter strong { font-weight: 600; }
+
+  /* ── Evidence: what the model actually said ──────────────────────────── */
+  .evidence {
+    margin: 1.4rem 0;
+    border-left: 3px solid var(--amber);
+    background: var(--amber-soft);
+    padding: 0.95rem 1.2rem;
+    border-radius: 0 4px 4px 0;
+    max-width: 38rem;
+  }
+  .evidence .lbl {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin-bottom: 0.5rem;
+  }
+  .evidence pre {
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+    color: var(--ink);
+  }
+  .evidence .q { font-size: 0.875rem; color: var(--mute); margin-bottom: 0.6rem; }
+
+  /* ── The fix: what replaced the guess ─────────────────────────────────── */
+  .fix {
+    margin: 1.4rem 0;
+    border-left: 3px solid var(--teal);
+    background: var(--teal-soft);
+    padding: 0.95rem 1.2rem;
+    border-radius: 0 4px 4px 0;
+    max-width: 38rem;
+  }
+  .fix .lbl {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--teal);
+    margin-bottom: 0.5rem;
+  }
+  .fix p { margin: 0; font-size: 0.9375rem; }
+  .fix code {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    background: color-mix(in oklab, var(--teal) 14%, transparent);
+    padding: 0.1em 0.35em;
+    border-radius: 3px;
+  }
+
+  /* ── Pull quote / thesis moment ───────────────────────────────────────── */
+  .thesis {
+    margin: 1.8rem 0;
+    padding: 1.4rem 1.6rem;
+    border: 1px solid var(--rule-strong);
+    border-radius: 4px;
+    max-width: 38rem;
+    background: var(--card);
+  }
+  .thesis p {
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
+    font-weight: 500;
+    font-size: 1.1875rem;
+    line-height: 1.45;
+    font-style: italic;
+    margin: 0;
+  }
+
+  /* ── Data table (the four prompting attempts) ────────────────────────── */
+  .attempts { width: 100%; border-collapse: collapse; margin: 1.2rem 0 1.6rem; font-size: 0.875rem; max-width: 38rem; }
+  .attempts th, .attempts td { text-align: left; padding: 0.55rem 0.8rem 0.55rem 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  .attempts th {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--faint);
+    border-bottom-color: var(--rule-strong);
+    white-space: nowrap;
+  }
+  .attempts td.n { font-family: var(--font-mono); color: var(--faint); }
+  .attempts td.result { color: var(--mute); }
+
+  /* ── Pipeline diagram ─────────────────────────────────────────────────── */
+  .pipeline { max-width: 38rem; margin: 1.6rem 0; }
+  .stage {
+    display: grid;
+    grid-template-columns: 6.5rem 1fr;
+    gap: 1rem;
+    position: relative;
+    padding-bottom: 1.6rem;
+  }
+  .stage:last-child { padding-bottom: 0; }
+  .stage::before {
+    content: "";
+    position: absolute;
+    left: 3.15rem;
+    top: 1.9rem;
+    bottom: -0.2rem;
+    width: 1px;
+    background: var(--rule-strong);
+  }
+  .stage:last-child::before { display: none; }
+  .stage .tok {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--teal);
+    background: var(--teal-soft);
+    border-radius: 4px;
+    padding: 0.4rem 0.6rem;
+    height: fit-content;
+    text-align: center;
+  }
+  .stage.model .tok { color: var(--amber); background: var(--amber-soft); }
+  .stage h4 { margin: 0 0 0.35rem; font-family: var(--font-display); font-weight: 600; font-size: 1.0625rem; }
+  .stage p { margin: 0; font-size: 0.9375rem; color: var(--mute); }
+  .stage .file { font-family: var(--font-mono); font-size: 0.75rem; color: var(--faint); }
+
+  /* ── Two-column comparison (decided by Python vs. decided by the model) ── */
+  .split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 1.6rem 0;
+    max-width: 38rem;
+  }
+  .split > div { background: var(--card); padding: 1.1rem 1.2rem; }
+  .split h5 {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin: 0 0 0.7rem;
+  }
+  .split .python h5 { color: var(--teal); }
+  .split .model h5 { color: var(--amber); }
+  .split ul { margin: 0; padding-left: 1.1rem; font-size: 0.875rem; color: var(--mute); }
+  .split li { margin-bottom: 0.4rem; }
+  .split li:last-child { margin-bottom: 0; }
+
+  /* ── Closing index ────────────────────────────────────────────────────── */
+  .index-list { list-style: none; margin: 1.2rem 0 0; padding: 0; max-width: 38rem; }
+  .index-list li {
+    display: grid;
+    grid-template-columns: 2.2rem 1fr;
+    gap: 0.8rem;
+    padding: 0.85rem 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .index-list li:first-child { border-top: 1px solid var(--rule); }
+  .index-list .n { font-family: var(--font-mono); font-size: 0.8125rem; color: var(--faint); }
+  .index-list .t { font-weight: 600; font-size: 0.9375rem; }
+  .index-list .d { color: var(--mute); font-size: 0.875rem; margin-top: 0.15rem; }
+
+  footer {
+    max-width: 44rem;
+    margin: 4rem auto 5rem;
+    padding: 1.6rem 1.5rem 0;
+    border-top: 1px solid var(--rule);
+    font-size: 0.8125rem;
+    color: var(--faint);
+    line-height: 1.6;
+  }
+
+  @media (max-width: 640px) {
+    .masthead { padding: 3.2rem 0 2.2rem; }
+    .toc ol { columns: 1; }
+    .chapter { padding-left: 3.1rem; }
+    .chapter .num { width: 2.3rem; height: 2.3rem; font-size: 0.75rem; }
+    .split { grid-template-columns: 1fr; }
+    .stage { grid-template-columns: 4.6rem 1fr; }
+    .stage::before { left: 2.3rem; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { scroll-behavior: auto !important; }
+  }
+</style>
+
+<article>
+
+<div class="wrap">
+  <div class="masthead">
+    <p class="eyebrow">Field notes &middot; internal</p>
+    <h1 class="title">The Sarathi Ledger</h1>
+    <p class="dek">How an admissions assistant for the Institute of Engineering was built, what it got wrong along the way, and what replaced the guessing. Written to hand to a teammate who wasn&rsquo;t in the room.</p>
+    <div class="meta-row">
+      <span><b>20</b> entries closed &middot; <b>4</b> open</span>
+      <span>local model &mdash; <b>qwen2.5:7b</b> via Ollama</span>
+      <span>LangGraph &middot; FastAPI &middot; Next.js &middot; Chroma</span>
+    </div>
+  </div>
+
+  <nav class="toc">
+    <p class="toc-label">Twelve entries</p>
+    <ol>
+      <li><a href="#ch1"><span class="n">01</span> The problem before the product</a></li>
+      <li><a href="#ch2"><span class="n">02</span> The skeleton</a></li>
+      <li><a href="#ch3"><span class="n">03</span> Grounding it in documents</a></li>
+      <li><a href="#ch4"><span class="n">04</span> The rank it wouldn&rsquo;t read</a></li>
+      <li><a href="#ch5"><span class="n">05</span> The date it invented</a></li>
+      <li><a href="#ch6"><span class="n">06</span> Becoming a product, not a demo</a></li>
+      <li><a href="#ch7"><span class="n">07</span> Citing its sources honestly</a></li>
+      <li><a href="#ch8"><span class="n">08</span> The blind spot</a></li>
+      <li><a href="#ch9"><span class="n">09</span> The interface grows up</a></li>
+      <li><a href="#ch10"><span class="n">10</span> Teaching it discipline in language</a></li>
+      <li><a href="#ch11"><span class="n">11</span> How it answers a question today</a></li>
+      <li><a href="#ch12"><span class="n">12</span> Why this isn&rsquo;t an agent</a></li>
+    </ol>
+  </nav>
+
+  <div class="spine">
+
+    <section class="chapter" id="ch1">
+      <div class="num">01</div>
+      <p class="tag">Origin</p>
+      <h2>The problem before the product</h2>
+      <p>A student trying to find out whether a quota deadline has passed has to check four or six different institutional websites &mdash; the Entrance Exam Board, the Institute of Engineering, Tribhuvan University, and whichever campus they&rsquo;re applying to &mdash; most of them Nepali-language PDFs behind a &ldquo;click here,&rdquo; dated in a calendar (Bikram Sambat) that nothing on the page converts for them.</p>
+      <p>Sarathi&rsquo;s own about page states the actual thesis, and it isn&rsquo;t a UX complaint: <em>&ldquo;Every year, students miss deadlines that were published correctly.&rdquo;</em> Nothing about that is anyone&rsquo;s fault, and all of it is avoidable. That sentence is the whole reason this exists &mdash; everything below is what it took to make it true.</p>
+    </section>
+
+    <section class="chapter" id="ch2">
+      <div class="num">02</div>
+      <p class="tag">Commit 597b1cd</p>
+      <h2>The skeleton</h2>
+      <p>The first version of Sarathi, in the commit message that made it: <em>&ldquo;a minimal langgraph chatbot with chat loop.&rdquo;</em> No documents, no retrieval, no dates, no lookups &mdash; a model and a graph, talking to itself.</p>
+      <p>Nothing else in this document is a rewrite of that loop. It&rsquo;s all additions to it, and every one of them was bolted on because the loop, left alone, did something a student couldn&rsquo;t trust.</p>
+    </section>
+
+    <section class="chapter" id="ch3">
+      <div class="num">03</div>
+      <p class="tag">Retrieval</p>
+      <h2>Grounding it in documents</h2>
+      <p>The next thing built was retrieval: IOE&rsquo;s notices and admission booklets, translated by hand into Markdown, chunked on their own headings, and embedded with a local model (<code>bge-m3</code>) into a Chroma vector store. A <code>retrieve</code> step in the graph fetches the nearest chunks to a question before the model ever writes a word.</p>
+      <p>This is what turned a chatbot into a RAG system &mdash; answers started coming from real institutional text instead of whatever the base model happened to know, which for a specific admission cycle in a specific country is approximately nothing. But grounding what the model <em>reads</em> doesn&rsquo;t stop it from <em>inventing</em> what it can&rsquo;t read. Two early bug reports proved that, back to back.</p>
+    </section>
+
+    <section class="chapter" id="ch4">
+      <div class="num">04</div>
+      <p class="tag">Issue 1</p>
+      <h2>The rank it wouldn&rsquo;t read</h2>
+      <p>Asked who scored a given rank on the entrance exam &mdash; a fact sitting in a CSV of 7,179 published results, right there in <code>docs/</code> &mdash; the bot refused:</p>
+      <div class="evidence">
+        <p class="q">The student asked for rank 13. The pass list had it.</p>
+        <div class="lbl">Measured</div>
+        <pre>To provide you with accurate information, I would need the
+specific form number of the candidate who scored rank 13...
+If no specific form number is provided, I cannot determine
+who scored rank 13 based on the available data.</pre>
+      </div>
+      <p>The pass list was in the index, technically searchable &mdash; but similarity search over names and roll numbers returns near-noise. A rank isn&rsquo;t a &ldquo;similar&rdquo; kind of fact, it&rsquo;s a specific row in a table.</p>
+      <div class="fix">
+        <div class="lbl">The fix</div>
+        <p>Pull the pass list out of the vector index entirely. Regex the raw question for a form number or a phrase like &ldquo;rank 13,&rdquo; look it up directly in the CSV, and hand the model the exact record to restate as a sentence &mdash; <code>results.py</code>, no embedding involved. The model composes; it never searches for a fact this precise.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="ch5">
+      <div class="num">05</div>
+      <p class="tag">Issue 2</p>
+      <h2>The date it invented</h2>
+      <p>Asked what today&rsquo;s date was, the model produced a fluent, plausible, entirely made-up answer:</p>
+      <div class="evidence">
+        <div class="lbl">Measured</div>
+        <pre>Today's date in Nepal is 2083 Shrawan 9 (2026-07-15).</pre>
+      </div>
+      <p>An LLM has no clock, and it&rsquo;s worse at Bikram Sambat arithmetic than it is confident about being wrong. Confidently wrong reads identical to right, right up until a student misses a deadline trusting it.</p>
+      <div class="fix">
+        <div class="lbl">The fix</div>
+        <p>Same shape as the rank problem: stop asking the model to know or calculate anything. <code>dates.py</code> computes today&rsquo;s date in Kathmandu, converts it to BS, and resolves <em>every</em> BS date mentioned in the question or the retrieved text to its AD equivalent and a plain offset (&ldquo;in 12 days,&rdquo; &ldquo;closed 12 days ago&rdquo;) &mdash; in Python, before the model runs. It&rsquo;s handed the finished numbers on every single turn and only ever asked to read them off.</p>
+      </div>
+      <div class="thesis">
+        <p>The pattern that came out of these two bugs is the one this project has run on ever since: never ask a small model to <em>know</em> or <em>compute</em> something a few lines of Python can get exactly right. Compute the fact, and let the model write the sentence around it.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="ch6">
+      <div class="num">06</div>
+      <p class="tag">Issue 3</p>
+      <h2>Becoming a product, not a demo</h2>
+      <p>With the two worst lies closed, the next problem was trust of a different kind: it looked like a hackathon chat window, and a nervous 18-year-old checking a deadline reads &ldquo;looks unofficial&rdquo; as &ldquo;might be wrong.&rdquo;</p>
+      <p>This is where the admin console arrived &mdash; an actual UI for uploading and reindexing documents, instead of SSH and a script &mdash; alongside a live notices feed shown beside the chat, and a full editorial visual pass: the TU crest, a Devanagari subline, formal type. The backend was already correct by this point; this chapter is what made that correctness legible.</p>
+    </section>
+
+    <section class="chapter" id="ch7">
+      <div class="num">07</div>
+      <p class="tag">Issues 5 &amp; 12</p>
+      <h2>Citing its sources, honestly</h2>
+      <p>Citations aren&rsquo;t markers the model is asked to emit inline. A 7B model&rsquo;s citation markers are wrong often enough that a citation which is <em>sometimes</em> there is worse than none &mdash; a student can&rsquo;t tell a dropped marker from an answer that was never grounded at all.</p>
+      <p>Instead they&rsquo;re computed after the fact: retrieval hands the prompt a set of candidate documents, and once the answer is written, each candidate is checked against it for shared distinctive vocabulary. Measured over real answers, a grounded answer shares <b>17&ndash;75%</b> of its distinctive words with the source it drew from; a refusal shares <b>2&ndash;15%</b>. The cut for &ldquo;name this source&rdquo; sits in that gap, and it errs downward &mdash; losing a citation costs a link the student can still find in the notices rail; inventing one puts a source under a sentence it never actually used.</p>
+    </section>
+
+    <section class="chapter" id="ch8">
+      <div class="num">08</div>
+      <p class="tag">Issue 13</p>
+      <h2>The blind spot</h2>
+      <p>Asked whether anything had been published that week, the bot said no &mdash; while the notices rail sitting right next to the chat was showing one from the day before. Four sites were already being scraped into a cache of 35 notices. The model simply had no way to see that cache; this wasn&rsquo;t an internet-access gap, it was a wiring gap.</p>
+      <p>The first instinct was to index the notice pages themselves. Sampling one page per source killed that plan fast &mdash; every one turned out to be a heading over a scanned PDF. The richest page held <b>209 characters</b>, and most of that was &ldquo;Click Here&rdquo; and &ldquo;in pdf format.&rdquo;</p>
+      <div class="fix">
+        <div class="lbl">The fix</div>
+        <p>Index the <em>record</em>, not the page: title, both dates, publisher, link &mdash; a few lines the assistant can state with confidence, alongside a standing digest of the six newest notices injected into every prompt, so &ldquo;anything new?&rdquo; never depends on the question happening to name one. Two more campuses were added along the way (six sources total, 57 notices), with one near-miss caught before it shipped: <code>cec.edu.np</code> looked like Chitwan Engineering Campus and isn&rsquo;t &mdash; it&rsquo;s an unrelated consultancy. The real campus, <code>cec.tu.edu.np</code>, publishes no feed of its own.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="ch9">
+      <div class="num">09</div>
+      <p class="tag">Issues 6, 11, 14&ndash;18, 20</p>
+      <h2>The interface grows up</h2>
+      <p>A run of smaller, real bugs, each one closing a gap between what the UI implied and what actually happened: raw model output became rendered Markdown; a chat-history sidebar meant a conversation was never lost; refreshing the page used to re-ask the last question and quietly spawn a duplicate conversation, traced to the question living in the URL&rsquo;s search params and fixed by handing it over out of band instead, the way a real chat product does it.</p>
+      <p>Scrolling had its own pair: reading back up mid-answer got yanked back down to the streaming text, and the fix for <em>that</em> briefly made a fresh answer look frozen because the follow-scroll was aiming at the wrong line &mdash; the sticky composer, not the actual foot of the page. And the whole thing read as flatly black-and-white until a second pigment was added on purpose: <b>crimson</b> only for a deadline with real consequences, <b>lapis</b> &mdash; Nepal&rsquo;s blue &mdash; for anything the app itself contributes rather than quotes: the dates it computed, the labels it prints, the row you&rsquo;re on.</p>
+    </section>
+
+    <section class="chapter" id="ch10">
+      <div class="num">10</div>
+      <p class="tag">Issue 19</p>
+      <h2>Teaching it discipline in language</h2>
+      <p>Asked to reply in Nepali, it wrote a fluent mix of Nepali and Hindi. Asked a plain question <em>in</em> Nepali, no instruction attached, it answered in Nepali &mdash; and invented syllabus subjects along the way. One rule already existed, buried sixty lines into the system prompt: <em>&ldquo;always reply in English.&rdquo;</em> The model never looked at it.</p>
+      <p>Four attempts at fixing this with better prompting followed, each one measured against the live bot rather than assumed to have worked &mdash; and each one failed differently:</p>
+      <table class="attempts">
+        <thead><tr><th>Attempt</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td class="n">1</td><td>The original buried rule, as shipped</td><td class="result">0 of 4 probes stayed in English</td></tr>
+          <tr><td class="n">2</td><td>Hoisted into its own section, told to refuse then answer</td><td class="result">Wrote the refusal itself &mdash; in Nepali</td></tr>
+          <tr><td class="n">3</td><td>&ldquo;Copy this exact refusal sentence, then answer&rdquo;</td><td class="result">12/12 stayed English, but 3/12 sent only the sentence and stopped</td></tr>
+          <tr><td class="n">4</td><td>&ldquo;The refusal is already handled, ignore the request&rdquo;</td><td class="result">6 of 18 &mdash; mostly back to Nepali</td></tr>
+        </tbody>
+      </table>
+      <p>The pattern across all four: naming the language request inside the prompt is what kept it alive, no matter how the instruction around it was worded.</p>
+      <div class="fix">
+        <div class="lbl">The fix</div>
+        <p>Stop naming it. The &ldquo;reply in Nepali&rdquo; clause is stripped out of the question with a deterministic check &mdash; a language name alone doesn&rsquo;t count, it takes a language <em>and</em> a speech verb, so &ldquo;is the exam set in Nepali?&rdquo; survives untouched. A question written in Nepali is translated to English before the model reads it at all, which removes the thing being mirrored instead of asking the model not to mirror it. And the one refusal sentence, when someone explicitly asks for another language, is written by the app &mdash; fixed wording that can&rsquo;t drift and can&rsquo;t be mistaken for the whole reply. Final score: <b>24 real turns across 8 cases, every one answered, every one in English.</b></p>
+      </div>
+    </section>
+
+    <section class="chapter" id="ch11">
+      <div class="num">11</div>
+      <p class="tag">Architecture</p>
+      <h2>How it answers a question today</h2>
+      <p>Take a real turn &mdash; <em>&ldquo;Has the quota deadline passed?&rdquo;</em> &mdash; and follow it through the graph:</p>
+      <div class="pipeline">
+        <div class="stage">
+          <div class="tok">python</div>
+          <div><h4>rewrite&#8203;_query</h4><p>Strips any request to answer in another language, translates the question to English if it wasn&rsquo;t written that way, and &mdash; on a follow-up turn &mdash; condenses it against the conversation into a standalone search string.</p><p class="file">graph.py</p></div>
+        </div>
+        <div class="stage">
+          <div class="tok">python</div>
+          <div><h4>retrieve</h4><p>Embeds the query, pulls the nearest chunks from Chroma, demotes documents written for foreign applicants unless the question actually signals one, keeps everything above a relevance floor.</p><p class="file">rag.py</p></div>
+        </div>
+        <div class="stage">
+          <div class="tok">python</div>
+          <div><h4>lookup&#8203;_result</h4><p>Regexes the <em>raw</em> message for a form number or merit rank. A match is answered by an exact CSV lookup, injected as a ready-made record &mdash; this is chapter four&rsquo;s fix, still running on every turn.</p><p class="file">results.py</p></div>
+        </div>
+        <div class="stage model">
+          <div class="tok">model</div>
+          <div><h4>chat&#8203;_node</h4><p>The only step that calls the LLM. Assembles the system rules, today&rsquo;s date, the notice digest, any resolved BS&harr;AD conversions, the lookup record, the retrieved chunks, then the conversation &mdash; one <code>model.invoke()</code> &mdash; and writes the answer.</p><p class="file">graph.py</p></div>
+        </div>
+      </div>
+      <p>Everything upstream of the model is deterministic and unit-testable without touching an LLM at all. The model is used for exactly one thing: turning a bundle of already-correct facts into a sentence a student can read.</p>
+    </section>
+
+    <section class="chapter" id="ch12">
+      <div class="num">12</div>
+      <p class="tag">Design decision</p>
+      <h2>Why this isn&rsquo;t an agent</h2>
+      <p>LangGraph supports tool-calling, and <code>qwen2.5:7b</code> does too &mdash; Ollama reports it as a model capability. Sarathi doesn&rsquo;t use it. Not because it&rsquo;s unavailable, because every failure chronicled above <em>is</em> what a missed or malformed tool call looks like:</p>
+      <div class="split">
+        <div class="python">
+          <h5>Decided by Python, every turn</h5>
+          <ul>
+            <li>Whether a form number or rank is in the question</li>
+            <li>What today&rsquo;s date is, and every BS&harr;AD conversion in play</li>
+            <li>Whether the notice feed needs refreshing</li>
+            <li>Whether the question asked to switch language</li>
+          </ul>
+        </div>
+        <div class="model">
+          <h5>Decided by the model, once</h5>
+          <ul>
+            <li>How to phrase the answer, from facts it was already handed</li>
+          </ul>
+        </div>
+      </div>
+      <p>Tool-calling would turn every one of the Python column&rsquo;s rows back into a judgment call the model has to get right on every single turn &mdash; whether to call a tool, which one, with what arguments &mdash; and this document is a long list of that exact model failing plainer instructions than that. Issue 13&rsquo;s original bug, the bot flatly denying a notice existed, <em>is</em> a tool-selection failure by definition: the question didn&rsquo;t look notice-related, so nothing would have fired. Injecting the digest into every prompt doesn&rsquo;t ask for that judgment; there&rsquo;s no decision left to get wrong.</p>
+      <p>There&rsquo;s also a plainer cost: a local 7B model is already the slow part of every turn, and a tool call is a full extra pass through it. None of this is a permanent verdict &mdash; it&rsquo;s specific to a small local model answering from a bounded, trusted set of facts. If the model tier goes up, or the set of things worth fetching stops being a short fixed list and starts being genuinely open-ended, this is the chapter worth reopening.</p>
+    </section>
+
+  </div>
+
+  <section class="chapter" style="padding-top: 3.4rem;">
+    <p class="tag">Still open</p>
+    <h2 style="font-family: var(--font-display); font-weight: 600; font-size: clamp(1.5rem, 3.4vw, 1.875rem); margin: 0 0 0.4rem;">The case isn&rsquo;t closed</h2>
+    <p style="color: var(--mute); max-width: 38rem;">Four entries in the tracker are still open, plus one thing found while writing this down that hadn&rsquo;t been reported yet.</p>
+    <ul class="index-list">
+      <li><span class="n">04</span><div><div class="t">KV cache</div><div class="d">Unstarted &mdash; reuse across turns for a local model that currently re-reads the whole prompt every time.</div></div></li>
+      <li><span class="n">08</span><div><div class="t">Rethink the app&rsquo;s scope</div><div class="d">Stay Pulchowk-only, or genuinely serve every constituent campus? Prune what doesn&rsquo;t earn its place.</div></div></li>
+      <li><span class="n">09</span><div><div class="t">Guide it to answer smartly</div><div class="d">Open-ended &mdash; likely needs a real scope-guard node in the graph, not another prompt paragraph.</div></div></li>
+      <li><span class="n">10</span><div><div class="t">Play with it, find what breaks</div><div class="d">Known live flaws: it still answers questions about other universities it should refuse; it will describe a notice&rsquo;s contents from its title alone, against an explicit prompt rule.</div></div></li>
+      <li><span class="n">&mdash;</span><div><div class="t">The daily cron doesn&rsquo;t exist</div><div class="d">A comment in <code>api.py</code> calls the 20-minute on-chat refresh a floor under &ldquo;the cron that refreshes it daily.&rdquo; There is no such cron anywhere in this repo. If nobody chats for a day and nobody hits the admin button, the notice cache just sits there.</div></div></li>
+    </ul>
+  </section>
+
+  <footer>
+    Compiled from <code>issues.md</code> and the project&rsquo;s commit history, for a teammate coming in cold. Numbers cited &mdash; contrast ratios, term-overlap fractions, probe run counts &mdash; were measured against the running app, not estimated.
+  </footer>
+</div>
+
+</article>

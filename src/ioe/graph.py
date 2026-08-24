@@ -339,6 +339,72 @@ def retrieve(state: ChatState) -> dict:
     }
 
 
+# ── Turns that need no documents ──────────────────────────────────────────────
+# "thanks" was costing more than a real question. rewrite_query is told to resolve
+# implied subjects from the history, and a greeting has no subject, so the model
+# borrowed the previous one: "thanks" was rewritten to "IOE admission exam date 2083",
+# which then retrieved 6.2 KB of exam-date documents to be prefilled into the prompt
+# before the model could say "you're welcome". Measured on the running app, one such
+# turn spent ~0.7s in the rewrite call and ~0.5s in the embedding call to assemble
+# context the answer could not use, and made every following turn slower still.
+#
+# So a turn that is only a greeting, a thank-you, or an acknowledgement is routed
+# straight to the answer. The test is a whole-message match against a fixed vocabulary,
+# not a judgement: anything with a question attached ("thanks, what about BArch?")
+# fails it and takes the ordinary path, because the cost of skipping retrieval on a
+# real question is an ungrounded answer, and the cost of not skipping it on a greeting
+# is a second of latency.
+#
+# Deliberately absent: "yes", "no", "sure". They read like small talk but they are
+# often the answer to something the assistant asked, and that turn may well need the
+# documents the question was about.
+_SMALL_TALK = re.compile(
+    r"^\W*(?:"
+    r"h+i+|h+e+y+|h+e+l+o+|hello|hiya|yo|namaste|namaskar|"
+    r"good\s+(?:morning|afternoon|evening|day)|good\s?night|"
+    r"thanks?|thank\s+you(?:\s+so\s+much|\s+very\s+much)?|thx|tysm|ty|"
+    r"ok(?:ay)?|k|cool|nice|great|awesome|perfect|got\s+it|understood|alright|all\s+right|"
+    r"bye|goodbye|see\s+you|"
+    r"how\s+are\s+you(?:\s+doing)?|what'?s\s+up|sup|"
+    r"who\s+are\s+you|what\s+can\s+you\s+do"
+    r")"
+    r"(?:\W+(?:there|again|sarathi|bro|sir|maam|ma'?am|dai|friend|buddy|man|guys?|"
+    r"a\s+lot|so\s+much|very\s+much))*\W*$",
+    re.IGNORECASE,
+)
+
+
+def is_small_talk(text: str) -> bool:
+    """Whether the message is social in its entirety and needs no documents."""
+    return bool(_SMALL_TALK.match(text.strip()))
+
+
+def small_talk(state: ChatState) -> dict:
+    """The no-documents path: answer from the system prompt and the conversation.
+
+    Every key retrieve and lookup_result would have written is written here too, and
+    written empty. State survives the turn it was made on, so leaving them alone would
+    hand chat_node the previous question's documents -- and print the previous
+    question's citations under "you're welcome".
+    """
+    return {
+        "question": state["messages"][-1].content,
+        "query": "",
+        "context": "",
+        "lookup": "",
+        "sources": [],
+    }
+
+
+def route_question(state: ChatState) -> str:
+    """Whether this turn needs the retrieval pipeline at all."""
+    return (
+        "small_talk"
+        if is_small_talk(state["messages"][-1].content)
+        else "rewrite_query"
+    )
+
+
 def lookup_result(state: ChatState) -> dict:
     """Answer form-number questions from the exact pass list, not from retrieval."""
     # The raw message, not the rewritten or translated one: both of those go through the
@@ -421,9 +487,15 @@ graph = StateGraph(ChatState)
 graph.add_node("rewrite_query", rewrite_query)
 graph.add_node("retrieve", retrieve)
 graph.add_node("lookup_result", lookup_result)
+graph.add_node("small_talk", small_talk)
 graph.add_node("chat_node", chat_node)
 
-graph.add_edge(START, "rewrite_query")
+graph.add_conditional_edges(
+    START,
+    route_question,
+    {"rewrite_query": "rewrite_query", "small_talk": "small_talk"},
+)
+graph.add_edge("small_talk", "chat_node")
 graph.add_edge("rewrite_query", "retrieve")
 graph.add_edge("retrieve", "lookup_result")
 graph.add_edge("lookup_result", "chat_node")

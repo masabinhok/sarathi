@@ -247,11 +247,19 @@ def format_table(categories: list[str]) -> str:
 
 
 # A question about money, in the words students use for it.
+# Devanagari terms sit outside the \b(...)\b group, never inside it. A Devanagari word
+# usually ends in a combining vowel sign -- the ी of धरौती, the ि of कति, the ा of भर्ना --
+# and Python's re does not count a combining mark as a word character, so the closing \b
+# has a non-word character on both sides of it and can never match. Written as
+# \b(...|धरौती|...)\b the term is not merely unreliable, it is unreachable: measured, the
+# whole of "धरौती कति हो" matched nothing and the question was turned away as off topic.
+# graph._OTHER_LANGUAGE already had this right; these two did not.
 _FEE_INTENT = re.compile(
-    r"\b(fee|fees|शुल्क|cost|costs|costly|price|pay|paid|payable|payment|charge|charges|"
-    r"expensive|afford|tuition|dharauti|धरौती|deposit|deposits|refund|refundable|"
-    r"how\s+much|कति|refunded|returned|get\s+(?:it\s+)?back|money|budget|"
-    r"rupees|rs\.?|npr)\b",
+    r"\b(fee|fees|cost|costs|costly|price|pay|paid|payable|payment|charge|charges|"
+    r"expensive|afford|tuition|dharauti|deposit|deposits|refund|refundable|"
+    r"how\s+much|refunded|returned|get\s+(?:it\s+)?back|money|budget|"
+    r"rupees|rs\.?|npr)\b"
+    r"|शुल्क|धरौती|कति|पैसा|रकम",
     re.IGNORECASE,
 )
 
@@ -270,11 +278,11 @@ _ADMISSION_SUBJECT = re.compile(
     r"\b(admission|admitted|admit|enrol|enroll|enrolment|enrollment|semester|semesters|"
     r"degree|programme|program|course|study|studying|studies|year|years|campus|college|"
     r"pulchowk|be\b|b\.e\.|barch|b\.arch|regular|full[\s-]?fee|fulfee|foreign|sponsored|"
-    r"quota|total|overall|altogether|whole|entire|lifetime|deposit|dharauti|धरौती|"
+    r"quota|total|overall|altogether|whole|entire|lifetime|deposit|dharauti|"
     r"refund|refundable|refunds|returned|get\s+(?:it\s+|them\s+|that\s+)?back|"
     r"tuition|library|laboratory|lab\b|hostel|insurance|id\s*card|identity\s*card|"
-    r"registration|union|welfare|sports|maintenance|infrastructure|"
-    r"भर्ना|सेमेस्टर|क्याम्पस|पुल्चोक|कलेज|फिर्ता)\b",
+    r"registration|union|welfare|sports|maintenance|infrastructure)\b"
+    r"|भर्ना|सेमेस्टर|क्याम्पस|पुल्चोक|कलेज|फिर्ता|धरौती|शुल्क",
     re.IGNORECASE,
 )
 

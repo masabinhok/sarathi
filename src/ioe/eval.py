@@ -36,7 +36,11 @@ FEES = "fees"
 SEATS = "seats"
 PRIORITY = "priority"
 NOTICES = "notices"
-REFUSED = "refused"
+# "The app did not answer the question on its merits." Today that is the guard writing a
+# refusal; after the rewrite it is the uncovered block, or the task-substitution
+# detector. One name for it, so a case does not have to know which graph it is running
+# against -- which is the whole point of keeping this suite across the rewrite.
+DECLINED = "declined"
 TIMEOUT = "TIMED-OUT"
 
 
@@ -52,6 +56,10 @@ def evidence(state: dict) -> set[str]:
     blocks = state.get("blocks")
     if isinstance(blocks, dict):
         found = {name for name, text in blocks.items() if text}
+        # Neither of these is evidence. Both mean the app declined to answer.
+        if found & {"uncovered", "deflected"}:
+            found -= {"uncovered", "deflected"}
+            found.add(DECLINED)
     else:
         found = set()
         if state.get("context"):
@@ -61,7 +69,7 @@ def evidence(state: dict) -> set[str]:
         if state.get("fees"):
             found.add(FEES)
     if state.get("refusal"):
-        found.add(REFUSED)
+        found.add(DECLINED)
     return found
 
 
@@ -76,74 +84,74 @@ def evidence(state: dict) -> set[str]:
 CASES: list[tuple[str, str, set[str], set[str]]] = [
     # ── Fees. Seeded from issue 23, including the four questions it opens with and the
     # label collisions that took five rounds of layout to settle.
-    ("fees", "how much do i have to pay as a regular student", {FEES}, {REFUSED}),
-    ("fees", "what is the total fee for a regular student", {FEES}, {REFUSED}),
-    ("fees", "how much is one semester", {FEES}, {REFUSED}),
-    ("fees", "how much is the dharauti", {FEES}, {REFUSED}),
-    ("fees", "धरौती कति हो", {FEES}, {REFUSED}),
-    ("fees", "how much is the library deposit", {FEES}, {REFUSED}),
+    ("fees", "how much do i have to pay as a regular student", {FEES}, {DECLINED}),
+    ("fees", "what is the total fee for a regular student", {FEES}, {DECLINED}),
+    ("fees", "how much is one semester", {FEES}, {DECLINED}),
+    ("fees", "how much is the dharauti", {FEES}, {DECLINED}),
+    ("fees", "धरौती कति हो", {FEES}, {DECLINED}),
+    ("fees", "how much is the library deposit", {FEES}, {DECLINED}),
     (
         "fees",
         "what does the whole degree cost for a full fee student",
         {FEES},
-        {REFUSED},
+        {DECLINED},
     ),
-    ("fees", "how much does a foreign student pay", {FEES}, {REFUSED}),
-    ("fees", "what is the sponsored fee at admission", {FEES}, {REFUSED}),
-    ("fees", "how much is the health insurance fee", {FEES}, {REFUSED}),
-    ("fees", "is any of it refundable", {FEES}, {REFUSED}),
-    ("fees", "tuition fee per semester", {FEES}, {REFUSED}),
+    ("fees", "how much does a foreign student pay", {FEES}, {DECLINED}),
+    ("fees", "what is the sponsored fee at admission", {FEES}, {DECLINED}),
+    ("fees", "how much is the health insurance fee", {FEES}, {DECLINED}),
+    ("fees", "is any of it refundable", {FEES}, {DECLINED}),
+    ("fees", "tuition fee per semester", {FEES}, {DECLINED}),
     # The other money. Issue 23 records these as the reason _OTHER_MONEY exists: the
     # entrance fee and the form fee are answered by the payment notices, not the schedule.
-    ("fees", "how much is the entrance exam fee", set(), {FEES, REFUSED}),
-    ("fees", "what is the application form fee", set(), {FEES, REFUSED}),
-    ("fees", "how do i pay with esewa", {DOCUMENTS}, {FEES, REFUSED}),
+    ("fees", "how much is the entrance exam fee", set(), {FEES, DECLINED}),
+    ("fees", "what is the application form fee", set(), {FEES, DECLINED}),
+    ("fees", "how do i pay with esewa", {DOCUMENTS}, {FEES, DECLINED}),
     # ── Pass list. Issue 21 widened this from form numbers and ranks to names and
     # districts; issue 1 is the original rank lookup.
-    ("results", "did form 2083-4567 pass", {LOOKUP}, {REFUSED}),
-    ("results", "who is rank 13", {LOOKUP}, {REFUSED}),
-    ("results", "who topped the entrance exam", {LOOKUP}, {REFUSED}),
-    ("results", "what rank did Ritesh Dawadi get", {LOOKUP}, {REFUSED}),
-    ("results", "who are the top candidates from Chitawan", {LOOKUP}, {REFUSED}),
-    ("results", "2083-2 ko rank kati ho", {LOOKUP}, {REFUSED}),
+    ("results", "did form 2083-4567 pass", {LOOKUP}, {DECLINED}),
+    ("results", "who is rank 13", {LOOKUP}, {DECLINED}),
+    ("results", "who topped the entrance exam", {LOOKUP}, {DECLINED}),
+    ("results", "what rank did Ritesh Dawadi get", {LOOKUP}, {DECLINED}),
+    ("results", "who are the top candidates from Chitawan", {LOOKUP}, {DECLINED}),
+    ("results", "2083-2 ko rank kati ho", {LOOKUP}, {DECLINED}),
     # A number that is not on the list still has to reach the lookup: issue 21 records
     # that saying "not found" is the answer, and inventing a candidate is the failure.
-    ("results", "did form 2083-99999 pass", {LOOKUP}, {REFUSED}),
+    ("results", "did form 2083-99999 pass", {LOOKUP}, {DECLINED}),
     # ── Ordinary retrieval.
-    ("docs", "what documents do i need for the women quota", {DOCUMENTS}, {REFUSED}),
-    ("docs", "what is the entrance exam syllabus for physics", {DOCUMENTS}, {REFUSED}),
-    ("docs", "how many marks is the entrance exam", {DOCUMENTS}, {REFUSED}),
-    ("docs", "which campuses offer architecture", {DOCUMENTS}, {REFUSED}),
+    ("docs", "what documents do i need for the women quota", {DOCUMENTS}, {DECLINED}),
+    ("docs", "what is the entrance exam syllabus for physics", {DOCUMENTS}, {DECLINED}),
+    ("docs", "how many marks is the entrance exam", {DOCUMENTS}, {DECLINED}),
+    ("docs", "which campuses offer architecture", {DOCUMENTS}, {DECLINED}),
     (
         "docs",
         "what happens if i do not take a lower priority seat",
         {DOCUMENTS},
-        {REFUSED},
+        {DECLINED},
     ),
-    ("docs", "am i eligible with a diploma", {DOCUMENTS}, {REFUSED}),
+    ("docs", "am i eligible with a diploma", {DOCUMENTS}, {DECLINED}),
     # ── Language. Issue 19: the answer is English whatever the question was written in,
     # and the question still has to reach the documents.
-    ("language", "प्रवेश परीक्षाको शुल्क कति हो", {DOCUMENTS}, {REFUSED}),
+    ("language", "प्रवेश परीक्षाको शुल्क कति हो", {DOCUMENTS}, {DECLINED}),
     (
         "language",
         "please reply in nepali, what documents do i need",
         {DOCUMENTS},
-        {REFUSED},
+        {DECLINED},
     ),
-    ("language", "answer in hindi: when is the exam", {DOCUMENTS}, {REFUSED}),
+    ("language", "answer in hindi: when is the exam", {DOCUMENTS}, {DECLINED}),
     # ── Scope. The half of issue 22's suite that has no history; the follow-ups that
     # need history are in CONVERSATIONS, which is where issue 24 says they belong.
-    ("scope", "write me a python function to reverse a list", set(), {DOCUMENTS}),
-    ("scope", "who won the world cup", set(), {DOCUMENTS}),
-    ("scope", "lets go on a holiday", set(), {DOCUMENTS}),
-    ("scope", "how do i apply to Kathmandu University", set(), {DOCUMENTS}),
-    ("scope", "solve x^2 + 5x + 6 = 0", set(), {DOCUMENTS}),
-    ("scope", "recommend a good laptop under 80000", set(), {DOCUMENTS}),
+    ("scope", "write me a python function to reverse a list", {DECLINED}, set()),
+    ("scope", "who won the world cup", {DECLINED}, set()),
+    ("scope", "lets go on a holiday", {DECLINED}, set()),
+    ("scope", "how do i apply to Kathmandu University", {DECLINED}, set()),
+    ("scope", "solve x^2 + 5x + 6 = 0", {DECLINED}, set()),
+    ("scope", "recommend a good laptop under 80000", {DECLINED}, set()),
     # Real questions that issue 22 records the classifier getting wrong on its own.
-    ("scope", "how many seats are there in pulchowk", {DOCUMENTS}, {REFUSED}),
-    ("scope", "what is the women's quota", {DOCUMENTS}, {REFUSED}),
-    ("scope", "which campus is best for civil", {DOCUMENTS}, {REFUSED}),
-    ("scope", "when do applications close", {DOCUMENTS}, {REFUSED}),
+    ("scope", "how many seats are there in pulchowk", {DOCUMENTS}, {DECLINED}),
+    ("scope", "what is the women's quota", {DOCUMENTS}, {DECLINED}),
+    ("scope", "which campus is best for civil", {DOCUMENTS}, {DECLINED}),
+    ("scope", "when do applications close", {DOCUMENTS}, {DECLINED}),
 ]
 
 # ── Conversations ─────────────────────────────────────────────────────────────
@@ -157,25 +165,27 @@ CONVERSATIONS: list[tuple[str, list[tuple[str, set[str], set[str]]]]] = [
         # Issue 24's own transcript, verbatim, including the typo.
         "issue24",
         [
-            ("hi", set(), {REFUSED}),
-            ("how much do i have to pay as a regular student", {FEES}, {REFUSED}),
+            ("hi", set(), {DECLINED}),
+            ("how much do i have to pay as a regular student", {FEES}, {DECLINED}),
             (
                 "write me a python function to calculate sum of three numbers",
                 set(),
                 {FEES},
             ),
-            ("and what other cateogry i could study in", set(), {REFUSED}),
-            ("what is its source", set(), {REFUSED}),
-            ("foreign?", {FEES}, {REFUSED}),
+            # IOE runs BE and BArch. The documents do not cover "other categories", and
+            # saying so is the answer -- inventing BBA and PhD programmes is the bug.
+            ("and what other cateogry i could study in", {DECLINED}, set()),
+            ("what is its source", set(), {DECLINED}),
+            ("foreign?", {FEES}, {DECLINED}),
         ],
     ),
     (
         "follow-up",
         [
-            ("what is the entrance exam fee", {DOCUMENTS}, {REFUSED}),
-            ("how do i pay it?", {DOCUMENTS}, {REFUSED}),
-            ("and the deadline?", set(), {REFUSED}),
-            ("what did i just ask you about?", set(), {REFUSED}),
+            ("what is the entrance exam fee", {DOCUMENTS}, {DECLINED}),
+            ("how do i pay it?", {DOCUMENTS}, {DECLINED}),
+            ("and the deadline?", set(), {DECLINED}),
+            ("what did i just ask you about?", set(), {DECLINED}),
         ],
     ),
     (
@@ -183,8 +193,8 @@ CONVERSATIONS: list[tuple[str, list[tuple[str, set[str], set[str]]]]] = [
         # "you're welcome" printed the fee notice as its source.
         "hygiene",
         [
-            ("how much is the dharauti", {FEES}, {REFUSED}),
-            ("thanks!", set(), {FEES, DOCUMENTS, LOOKUP, REFUSED}),
+            ("how much is the dharauti", {FEES}, {DECLINED}),
+            ("thanks!", set(), {FEES, DOCUMENTS, LOOKUP, DECLINED}),
         ],
     ),
 ]
@@ -252,12 +262,61 @@ def _check(got: set[str], want: set[str], forbid: set[str]) -> str:
     return ""
 
 
+# ── The detector ──────────────────────────────────────────────────────────────
+# scope.is_task_substitution is the one deterministic thing standing between a student
+# and "here's a simple Python function". Its danger is not missing one -- it is firing on
+# a real question, which is how issue 24's guard broke the conversation. So its precision
+# is checked against every question in this file, on every run. It needs no model and
+# takes no measurable time.
+
+MUST_FIRE = [
+    "write me a python function to reverse a list",
+    "write me a python function to calculate sum of three numbers",
+    "solve x^2 + 5x + 6 = 0",
+    "recommend a good laptop under 80000",
+    "who won the world cup",
+    "what is the capital of france",
+    "can you help me with my physics homework",
+    "translate this into nepali",
+    "debug my code please",
+    "write me an essay about nepal",
+]
+
+
+def check_detector() -> int:
+    """Recall on the tasks it must catch, precision against every question here."""
+    from ioe.scope import is_task_substitution
+
+    failures = 0
+    for question in MUST_FIRE:
+        if not is_task_substitution(question):
+            print(f"FAIL detector  did not fire on {question!r}")
+            failures += 1
+
+    corpus = [q for _, q, _, _ in CASES] + [
+        m for _, turns in CONVERSATIONS for m, _, _ in turns
+    ]
+    for question in corpus:
+        if question in MUST_FIRE:
+            continue
+        if is_task_substitution(question):
+            print(f"FAIL detector  fired on a real question: {question!r}")
+            failures += 1
+
+    if not failures:
+        print(
+            f"ok   detector   {len(MUST_FIRE)}/{len(MUST_FIRE)} caught, "
+            f"silent on all {len(corpus)} questions in this suite"
+        )
+    return failures
+
+
 async def run(groups: set[str] | None = None) -> int:
     """Run the suite. Returns the number of failures."""
     from ioe.graph import get_chatbot
 
     probe = _probe()
-    failures = 0
+    failures = check_detector()
     total = 0
 
     for group, question, want, forbid in CASES:

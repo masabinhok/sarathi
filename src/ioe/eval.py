@@ -228,10 +228,10 @@ def _probe():
     )
 
 
-# Ollama unloads an idle model and reloads it on the next request, and a reload that
-# does not come back takes the whole suite with it -- observed once, at fourteen minutes
-# elapsed and six seconds of CPU, with nothing printed to say where it stopped. A turn
-# that hangs is a failed turn, not a stopped run.
+# Defensive, not diagnostic. Nothing has been observed hanging mid-turn; a run that
+# looked stuck turned out to have finished and hung on exit instead (see close_saver).
+# But a turn is one model call away from an Ollama that may be reloading an evicted
+# model, and a suite that stops with no output says less than one that fails a case.
 TURN_TIMEOUT = 180.0
 
 
@@ -348,7 +348,25 @@ async def run(groups: set[str] | None = None) -> int:
                 print(f"     ^ {problem}")
 
     print(f"\n{total - failures}/{total} passed")
+    await close_saver(bot)
     return failures
+
+
+async def close_saver(bot) -> None:
+    """Close the checkpointer's connection, or the process will not exit.
+
+    AsyncSqliteSaver holds an aiosqlite Connection, and aiosqlite runs it on a
+    non-daemon thread that nothing joins. The suite would print its result and then sit
+    there: measured at twenty-two minutes elapsed against seven seconds of CPU, with
+    forty-nine threads parked on futexes. It looks exactly like a hung run, and it cost
+    an hour of believing one.
+
+    The app itself never needed this -- api.py holds one connection for the life of the
+    process, which is the right thing for a server and the wrong thing for a script.
+    """
+    conn = getattr(bot.checkpointer, "conn", None)
+    if conn is not None:
+        await conn.close()
 
 
 def main() -> None:

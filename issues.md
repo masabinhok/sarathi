@@ -496,3 +496,113 @@ application form fee, which are different money answered by the payment notices.
 interaction bug surfaced and was fixed on the way: "how much is the health insurance fee"
 was being *refused*, because `guard`'s classifier reads "health" as a health question. The
 40-case regression from `22` still passes in full.
+
+## 24. answering scope
+
+```
+You asked
+
+hi
+
+Hello! I'm here to assist with any questions you have about IOE admissions and entrance exams. Please feel free to ask about the IOE entrance process, eligibility criteria, application steps, or anything related to applying for BE, BArch, or postgraduate programs at IOE campuses.
+
+If your question is off-topic, such as coding help or general knowledge, please let me know, and I'll guide you accordingly.
+
+You asked
+
+how much do i have to pay as a regular student
+
+As a regular student, you need to pay a total of 19,269 NPR on the admission day. This amount includes all initial fees but is part of the overall degree cost of 72,287 NPR for the entire 8-semester program. Once any deposits are refunded at the end of your studies, the total effective cost would be 68,887 NPR.
+
+Source
+
+    01Pulchowk Campus BE/BArch Admission Notice 2083/084 — Schedule, Priority Rules and Fees ↗2083 · Fee table A — Regular fees, per semester
+
+You asked
+
+write me a python function to calculate sum of three numbers
+
+I only handle questions about IOE admissions and the IOE entrance exam, so I have to leave that one alone. Ask me about the exam, your application, the fees, a result, or a campus and I can help.
+
+You asked
+
+and what other cateogry i could study in
+
+Based on the information provided, it seems that you are focused on admissions to Bachelor of Engineering (B.E.) or Bachelor of Architecture (B.Arch.) programs at Tribhuvan University's Institute of Engineering (IOE) campuses. However, IOE offers a variety of other academic programs beyond B.E. and B.Arch., including:
+
+    Bachelor of Science (B.Sc.) - Various branches such as:
+        Computer Science
+        Electronics & Communication
+        Electrical & Electronic
+        Civil Engineering
+        Mechanical Engineering
+
+    Bachelor of Technology (B.Tech.) - Similar to B.E., but with a slightly different curriculum and emphasis.
+
+    Bachelor of Business Administration (B.B.A.)
+
+    Bachelor of Science in Business Administration (B.S.B.A.)
+
+    Bachelor of Applied Science (B.A.Sc.)
+
+    Bachelor of Arts (B.A.) - For students interested in humanities, social sciences, and other non-engineering disciplines.
+
+    Master's Programs - Including M.E., M.Tech., M.Sc., etc.
+
+    Postgraduate Diploma Programs
+
+    Professional Development Courses and Short-term Courses
+
+    Doctor of Philosophy (Ph.D.) programs for research-oriented studies.
+
+If you are specifically interested in any of these other programs, you would need to check the admission requirements and procedures for each respective program at IOE or affiliated institutions. The admissions process, including entrance exams, merit lists, and application procedures, may vary between different programs and campuses.
+
+For detailed information on specific programs, it's best to visit the official websites of IOE constituent campuses or contact their admissions offices directly.
+
+You asked
+
+what is its source
+
+I only handle questions about IOE admissions and the IOE entrance exam, so I have to leave that one alone. Ask me about the exam, your application, the fees, a result, or a campus and I can help.
+
+You asked
+
+what other category i could study in interms of fees
+
+Based on the information provided, you can consider studying in one of the following categories in terms of fees:
+
+    Full Fee: This category would involve paying the full amount without any sponsorship or reduced fee structure.
+
+    Sponsored Students: These are students who receive financial support from their institutions and have to pay a reduced fee as a result. The notice mentions that Sponsored tuition is 30 percent above Full Fee tuition, so this would be a significant difference in cost compared to the Regular (नियमित) rate.
+
+Given that you mentioned the "Regular" or "नियमित" rate without specifying which category you are in, and considering the Regular fees are the most common for students, studying under either the Full Fee or Sponsored categories could be other options you might want to explore. Each of these categories has distinct fee structures as outlined in the document.
+
+If you need more specific details on the fees for the Full Fee or Sponsored categories, you can refer back to the table provided and note that:
+
+    Full Fee would apply if you are not receiving any sponsorship.
+    Sponsored Students would have higher fees than Regular students due to the 30% increase.
+
+These differences in fees could impact your overall cost and financial planning.
+
+Source
+
+    01Pulchowk Campus BE/BArch Admission Notice 2083/084 — Schedule, Priority Rules and Fees ↗2083 · Fee table A — Regular fees, per semester
+
+You asked
+
+foreign?
+
+I only handle questions about IOE admissions and the IOE entrance exam, so I have to leave that one alone. Ask me about the exam, your application, the fees, a result, or a campus and I can help.
+```
+look at the above convo, first it answered wronlgy that ioe teaches all those, i guess TU teaches it. next it still rejects the foreign? because its out of scope it has not continuation context. i think we should not refuse anything, we should restructure the prompt from scratch: strcitly answer in english. strictly answer questions grounded in docuemnts provided, to any context as much as possible, have continuation context, and only refuse if no docuemnts could answer the relecant txt based on conversation context. we should apply short term memory, long term memoery concepts. and feed back the summary of the convo, is the context window is having some issues. also the system prompts are too long and are so ineffective. we should optimize them to make the bot robust
+
+## 25. supervisor queries
+he wants to add feature of seat probability based on rank, previous year cutoff marks. current priority list scanning and then estimating probability of getting the subject chosen based on number of seats available, same sub chosen by higher rankers(1 being the highgest)
+ioe booklet feeding, seat details of all affiliated campusses and the courses offered. 
+
+## 26. my query
+i think the app has become quite complex with a lot of iterative additions. could not the same functionality achieved through simple patterns/code. how about we shift to langgraph chatbot with tool calling only when necessary with rag as a tool, you can oppose with strict facts and why not. but i want to simplify the codebase, optimize. is gemma a better model? how about we test the tool calling abitlity of local models. i guess, our chatbot using suitable tools like date tool, result_lookup tool, fee_Calc_tool, priority_rank_tool. and many others, and use only when necessary otherwise go through a normal ragbot loop. 
+also, we should directly give a strict prompt of do not ever answer in any other languages other than english. alwasy answer in english. isnt this prompt enought to stop the bot from answering in other languages. 
+and also enforce the incoversation context more, through summarization. instead of refusing to answer query unrelated to ioe, it should try to answer every query being releavent to ioe, like if somnething doesnot match any docuemtn semantically, no ioe doesnot offer that, or include that. kind of asnwer crafted by the llm based on strcutured output. 
+
+let's work on a different branch leave the main branch as it is, and experiment with a simple langgraph agent with tool calling capabilities, or hitl also when fetching notices, stm, ltm for more robus convos.

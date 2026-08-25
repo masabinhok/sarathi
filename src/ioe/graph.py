@@ -9,6 +9,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import MessagesState
 
 from ioe.dates import annotate_dates, today_context
+from ioe.fees import FEE_SOURCE, fee_context
 from ioe.notices import digest as notice_digest
 from ioe.rag import (
     MAX_SOURCES,
@@ -150,6 +151,9 @@ class ChatState(MessagesState):
     query: str
     context: str
     lookup: str
+    # Fee totals worked out in full, so the model reads them instead of doing the
+    # arithmetic that it got wrong every time it was asked.
+    fees: str
     sources: list[dict]
     # The refusal the guard wrote if it turned the question away, or "".
     refusal: str
@@ -394,6 +398,7 @@ def small_talk(state: ChatState) -> dict:
         "query": "",
         "context": "",
         "lookup": "",
+        "fees": "",
         "sources": [],
         "refusal": "",
     }
@@ -409,10 +414,17 @@ def route_question(state: ChatState) -> str:
 
 
 def lookup_result(state: ChatState) -> dict:
-    """Answer form-number questions from the exact pass list, not from retrieval."""
+    """Answer from the exact tables -- the pass list and the fee schedule -- rather than
+    leaving either to retrieval and arithmetic."""
+    asked = state["messages"][-1].content
     # The raw message, not the rewritten or translated one: both of those go through the
     # model, and a form number that survives a paraphrase may not survive a translation.
-    return {"lookup": lookup_context(state["messages"][-1].content)}
+    lookup = lookup_context(asked)
+    # Fees are the other way round. There is no exact token to preserve, and the rewrite
+    # is a translation into English, so a question asked in Nepali is recognised there
+    # and not in the original. Both are read, and the first that matches wins.
+    fees = fee_context(asked) or fee_context(state.get("question") or "")
+    return {"lookup": lookup, "fees": fees}
 
 
 # ── Keeping to the subject ────────────────────────────────────────────────────
@@ -527,7 +539,7 @@ def best_match(question: str) -> float:
 
 def guard(state: ChatState) -> dict:
     """Decide whether this question is answered at all."""
-    if state.get("lookup"):
+    if state.get("lookup") or state.get("fees"):
         return {"refusal": ""}
     messages = state["messages"]
     question = state.get("question") or messages[-1].content
@@ -578,6 +590,15 @@ def chat_node(state: ChatState) -> dict:
     if context:
         prompt.append(SystemMessage(content=f"Reference documents:\n\n{context}"))
 
+    # Last, after the documents rather than before them. Placed ahead of them it was
+    # ignored: retrieval puts the raw fee tables in the same prompt, and asked for a
+    # degree total the model went back to the line items and multiplied, which is the
+    # one thing these worked figures exist to stop. Whatever is nearest the question
+    # wins with a 7B model, so the settled numbers go nearest the question.
+    fees = state.get("fees")
+    if fees:
+        prompt.append(SystemMessage(content=fees))
+
     # rewrite_query settled what the question is: stripped of any request to answer in
     # another language, and in English. The message the student typed stays in the
     # transcript untouched -- only the copy the model reads is swapped.
@@ -612,6 +633,13 @@ def chat_node(state: ChatState) -> dict:
         sources = [
             RESULT_SOURCE,
             *(s for s in sources if s.get("url") != RESULT_SOURCE["url"]),
+        ]
+    if state.get("fees"):
+        # Same reasoning as the pass list: the figures came from the notice's own tables,
+        # whatever else retrieval put in the prompt, so the notice is cited outright.
+        sources = [
+            FEE_SOURCE,
+            *(s for s in sources if s.get("file") != FEE_SOURCE["file"]),
         ]
 
     # Attached to the message rather than to the state so they stay with the turn they

@@ -20,7 +20,7 @@ the open list and take the next free number.
 | [9](#9--guide-the-bot-to-answer-smartly) | Guide the bot to answer smartly | prompt / graph |
 | [10](#10--play-with-the-bot-and-fix-what-breaks) | Play with the bot and fix what breaks | prompt / graph |
 
-### Closed — 18
+### Closed — 19
 
 | # | Issue | Status |
 | --- | --- | --- |
@@ -42,6 +42,7 @@ the open list and take the next free number.
 | [20](#20--fixed--the-theme-colour-barely-shows) | The theme colour barely shows | `FIXED` |
 | [21](#21--fixed--the-pass-list-lookup-only-took-a-form-number-or-a-rank) | The pass list lookup only took a form number or a rank | `FIXED` |
 | [22](#22--fixed--it-answers-questions-outside-its-scope-and-then-loses-the-thread) | It answers questions outside its scope, and then loses the thread | `FIXED` |
+| [23](#23--fixed--it-gets-the-fee-arithmetic-wrong) | It gets the fee arithmetic wrong | `FIXED` |
 
 ---
 
@@ -416,3 +417,82 @@ off-topic questions refused (~1.5s each, no model call); 10/10 real questions an
 in under a second. Refusals are stored on state so a reloaded conversation shows the same
 sentence, and `api._stream` sends it explicitly — the `refuse` node makes no model call, so
 it streams no tokens of its own.
+
+## 23 · `FIXED` · It gets the fee arithmetic wrong
+
+> it causes error in fee calculation, there are three columns, regular, fullfee and
+> foreign, and three boxes: for each box at the end, there is a total [...] a regular
+> student has to pay 66487, and 17669 in his lifetime in this college, with the 3400
+> dharauti amount to be returned
+
+Every figure in that report is in the documents already, and retrieval finds them. Four
+questions, four different ways of getting them wrong:
+
+| Asked | Answered |
+| --- | --- |
+| total for the whole degree | multiplied 6,974 by 8 correctly, then trailed off before a total |
+| total fee for a regular student | invented a per-programme tuition table that is in no document, and a rule that Regular students pay "30% less than full fee" |
+| what is due on admission day | right figure, wrong breakdown — called 17,669 the table A total |
+| how much do I get back | invented a refund policy, including a hardship refund |
+
+One cause. Reading these tables requires arithmetic — a per-semester figure times eight,
+three tables added, and one number that is a *part* of the degree total rather than an
+addition to it — and a 7B model does arithmetic about as reliably as it does anything
+else it was not given. So the totals are computed in `src/ioe/fees.py` and handed over
+already worked out, exactly as `dates.annotate_dates` hands over BS/AD conversions. A
+number the model reads is right; a number it derives is a coin toss.
+
+Only the line items are stored. Every total is summed from them, and `verify()` re-derives
+all twenty published totals from those line items and fails if any disagrees, so a typo
+here breaks loudly rather than teaching the assistant a wrong number. That check also
+settled which document wins where the two disagree: the campus notice reproduces from its
+own line items, and the booklet does not — it prints 286,470 as the Full Fee amount due at
+admission where the items give 216,470, and its Foreign column drifts by a few rupees in
+several places.
+
+**On the report's own arithmetic:** 17,669 is not a separate lifetime charge. It is
+6,974 + 7,295 + 3,400 — one semester plus both one-time boxes — so it is already inside
+the 66,487, not owed on top of it. 66,487 is the published tables-only figure; the campus
+notice also charges internet at 600 a semester and 1,000 to the Engineering Council, which
+brings the real degree total to 72,287, of which 3,400 comes back.
+
+The wiring is `lookup_result`'s, extended: the fee schedule is a second exact table beside
+the pass list, and `guard` treats a fee question as in scope by construction. The block is
+read off the raw message and off the rewritten one — the rewrite is a translation, so a
+question asked in Nepali is recognised there and not in the original.
+
+Getting the model to actually use it took five rounds, and every one of them was layout
+rather than instruction:
+
+- **Position.** Placed before the retrieved documents it was ignored outright — retrieval
+  puts the raw fee tables in the same prompt, and the model went back to the line items
+  and multiplied. Whatever sits nearest the question wins, so the settled numbers go last.
+- **No arithmetic in the block.** It first showed its working — `8 x 6,974 + 7,295 +
+  3,400 = 66,487` — and the model copied the habit rather than the result, printing sums
+  that were wrong around a figure that was right.
+- **One category, not four.** Four columns was tried on the reasoning that reading off a
+  number would then mean reading off a heading. It was worse: tracking a column across
+  fifty characters of whitespace is the one thing a 7B model cannot do, and "how much is
+  the library deposit" came back as the Full Fee figure labelled Regular. It now narrows
+  to the category the student named, or to Regular with the answer saying so.
+- **Totals first.** The model answers with the first plausible row it meets. Below the
+  components, "the sponsored fee at admission" came back as a component subtotal.
+- **Labels.** "at admission" appears on the TOTAL row and nowhere else, because while the
+  one-time charges were labelled "one-time fees at admission" they took that question
+  instead. The three deposits are prose under the table rather than rows, because as rows
+  they outcompeted their own total and "the deposit for a full fee student" came back as
+  the campus deposit alone.
+
+Two things the block states outright, because they were invented when the model had to
+reason: that only the table C deposits are returned and there is no withdrawal or hardship
+refund, and that the four categories are separate rates rather than discounts off one
+another.
+
+Verified against the live bot: 26 fee questions, every figure correct and no number in any
+answer that is not in the schedule — including the ones that were wrong before, the
+line-item questions, both totals for all four categories, and the Nepali phrasing. The
+detector is 17/17 on firing, and stands down for the entrance examination fee and the
+application form fee, which are different money answered by the payment notices. One
+interaction bug surfaced and was fixed on the way: "how much is the health insurance fee"
+was being *refused*, because `guard`'s classifier reads "health" as a health question. The
+40-case regression from `22` still passes in full.

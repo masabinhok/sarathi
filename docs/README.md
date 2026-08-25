@@ -76,3 +76,28 @@ uv run ioe-index
 ```
 
 Nothing is picked up until that runs.
+
+### `data/cutoffs.csv` — empty on purpose
+
+The lowest merit rank actually admitted to a programme, per campus, per category, per
+admission list. `src/ioe/cutoffs.py` answers "what rank got in last time" from it, and
+while the file holds only its header it says there is no data rather than estimating.
+
+Nothing in this repository can stand in for it. The pass list in
+`03_BE_BArch_Entrance_Result_2083_pass_list.csv` carries form number, rank, name,
+gender and district — and no programme or campus column, so it cannot say what anyone
+applied for or where. The booklet gives seat counts, which say how many students a
+campus takes, not how far down the merit list it reached.
+
+The figures do exist, published, and filling this file is transcription work of the same
+kind the pass list already took:
+
+| What | Where |
+| --- | --- |
+| First Phase Applicant Priority List, 2083/05/03 | `pcampus.edu.np/2026/08/19/be-barch-admission-2083-first-phase-applicant-priority-list-and-priority-correction-notice/` |
+| First Admission List, 2083/05/06 | `pcampus.edu.np/2026/08/22/be-barch-admission-2083-first-admission-list/` |
+| Revised First Admission List, 2083/05/07 | `pcampus.edu.np/2026/08/23/be-barch-admission-2083-revised-first-admission-list/` |
+| Pashchimanchal First Admission List, 2083/05/06 | `wrc.edu.np/6404` |
+
+Those are this year's lists, which makes them better evidence than the previous-year
+cutoffs the request was framed around — they describe the cycle the student is in.

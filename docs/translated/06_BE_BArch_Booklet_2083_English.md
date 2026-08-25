@@ -12,6 +12,8 @@ level: undergraduate
 **Translation type:** Semantic (meaning-preserving), not word-for-word. Key Nepali terms/acronyms are given in parentheses on first use for traceability. Devanagari numerals converted to Arabic numerals. Dates are Bikram Sambat (BS) unless noted — not converted to AD.
 
 > ⚠️ **Verification notice (read before using in a RAG pipeline or for decisions):** Sections 6 (quota tables) and 9 (fee table) contain dense grids of small numerals read from scanned table images. These are the highest-risk part of this translation for digit-level transcription error — I caught at least one internal arithmetic mismatch while transcribing (noted inline in Section 9) that I could not fully resolve without the source. **Before using this document to answer real student questions about fees, quotas, or reserved seats, spot-check the numeric tables in Sections 6 and 9 against the original PDF.** The rest of the document (procedures, eligibility rules, code of conduct, syllabus) is prose-based and carries much lower transcription risk.
+>
+> **Section 2.7 has since been checked against the original PDF and corrected.** The constituent-campus grid was right cell for cell. The TU-affiliated college grid had nine cells wrong, across the Architecture, Electrical, Electronics and Computer rows: three of its ten college subtotals did not add up, and the errors cancelled to leave the printed grand total of 2,304 looking correct. Both grids now reconcile against every subtotal the booklet prints, and `src/ioe/seats.py` re-derives all seventeen of those totals so a future slip cannot pass unnoticed.
 
 ---
 
@@ -200,10 +202,10 @@ Admission to TU-affiliated colleges also requires passing the entrance examinati
 | Program | Kantipur | Kathmandu Eng. College | Himalaya | Advanced College (Eng. & Mgmt) | National College | Kathford (Eng. & Mgmt) | Janakpur | Khwopa | Sagarmatha | Lalitpur Eng. College |
 |---|---|---|---|---|---|---|---|---|---|---|
 | Civil | 96 | 96 | 96 | 96 | 96 | 96 | 96 | 96 | 48 | 48 |
-| Architecture | – | 48 | 48 | – | – | – | – | 48 | – | – |
-| Electrical | – | 48 | 48 | 48 | – | – | – | – | – | – |
-| Electronics, Communication & Information | 96 | 96 | 48 | 96 | 48 | 48 | – | 48 | – | – |
-| Computer | 96 | 96 | 48 | 96 | 48 | 48 | 48 | – | 96 | 48 |
+| Architecture | – | 48 | 48 | – | – | – | – | – | – | – |
+| Electrical | – | 48 | – | 48 | 48 | – | – | 48 | – | – |
+| Electronics, Communication & Information | 96 | 96 | 48 | 96 | 48 | 48 | 48 | – | 48 | – |
+| Computer | 96 | 96 | 48 | 96 | 48 | 48 | 48 | 48 | 48 | 48 |
 | **Subtotal** | **288** | **384** | **240** | **336** | **240** | **192** | **192** | **192** | **144** | **96** |
 | **Grand Total (all affiliated colleges)** | **2,304** | | | | | | | | | |
 

@@ -305,14 +305,24 @@ def is_fee_question(text: str) -> bool:
     return bool(_ADMISSION_SUBJECT.search(text) or find_categories(text))
 
 
-def fee_context(text: str) -> str:
+def fee_context(text: str, force: bool = False) -> str:
     """Worked fee totals for the question, or "" if it is not about fees.
 
     Every figure is stated. Nothing is left for the model to add up, and the two things
     it invented when it had to reason -- a discount for Regular students, and a refund
     policy -- are contradicted here in as many words.
+
+    `force` is for a model that asked for these figures by name. The detector reads the
+    student's wording, and a model calling the fee tool has read the conversation, which
+    the detector has not -- "and for a foreign student?" is a fee question that no regex
+    over those four words can see. It skips the detector; it does not skip _OTHER_MONEY,
+    which is checked separately below, because the entrance examination fee is a
+    different sum of money and answering it from this table is the failure that check
+    exists to prevent.
     """
-    if not is_fee_question(text):
+    if not force and not is_fee_question(text):
+        return ""
+    if force and _OTHER_MONEY.search(text):
         return ""
     asked = find_categories(text)
     # Most students are Regular, and the alternative -- printing all four and leaving the

@@ -259,9 +259,13 @@ def format_constituent(campuses: list[str], programmes: list[str]) -> str:
     return "\n".join(lines)
 
 
-def seat_context(text: str) -> str:
-    """The authoritative seat block, or "" when the question is not about seats."""
-    if not is_seat_question(text):
+def seat_context(text: str, force: bool = False) -> str:
+    """The authoritative seat block, or "" when the question is not about seats.
+
+    `force` is for a model that asked for seat figures by name, having read a
+    conversation the detector cannot see. See fees.fee_context for the same argument.
+    """
+    if not force and not is_seat_question(text):
         return ""
 
     campuses = find_campuses(text)

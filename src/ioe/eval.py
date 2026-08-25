@@ -37,6 +37,7 @@ SEATS = "seats"
 PRIORITY = "priority"
 NOTICES = "notices"
 REFUSED = "refused"
+TIMEOUT = "TIMED-OUT"
 
 
 def evidence(state: dict) -> set[str]:
@@ -217,16 +218,31 @@ def _probe():
     )
 
 
+# Ollama unloads an idle model and reloads it on the next request, and a reload that
+# does not come back takes the whole suite with it -- observed once, at fourteen minutes
+# elapsed and six seconds of CPU, with nothing printed to say where it stopped. A turn
+# that hangs is a failed turn, not a stopped run.
+TURN_TIMEOUT = 180.0
+
+
 async def _run_turn(bot, thread: str, message: str) -> tuple[set[str], float]:
     started = time.time()
-    state = await bot.ainvoke(
-        {"messages": [HumanMessage(content=message)]},
-        {"configurable": {"thread_id": thread}},
-    )
+    try:
+        state = await asyncio.wait_for(
+            bot.ainvoke(
+                {"messages": [HumanMessage(content=message)]},
+                {"configurable": {"thread_id": thread}},
+            ),
+            timeout=TURN_TIMEOUT,
+        )
+    except TimeoutError:
+        return {TIMEOUT}, time.time() - started
     return evidence(state), time.time() - started
 
 
 def _check(got: set[str], want: set[str], forbid: set[str]) -> str:
+    if TIMEOUT in got:
+        return f"no answer within {TURN_TIMEOUT:.0f}s"
     missing = want - got
     present = forbid & got
     if missing:

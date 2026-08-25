@@ -13,8 +13,10 @@ from ioe.fees import FEE_SOURCE, fee_context
 from ioe.notices import digest as notice_digest
 from ioe.rag import (
     MAX_SOURCES,
+    MIN_RELEVANCE,
     NUM_CTX,
     OLLAMA_URL,
+    TOP_K,
     format_context,
     get_store,
     keep_grounded,
@@ -25,12 +27,6 @@ from ioe.results import RESULT_SOURCE, lookup_context
 from ioe.threads import DB_PATH
 
 TEXT_MODEL = "qwen2.5:7b"
-
-# Chunks retrieved per question, and the cosine relevance floor a chunk must clear.
-# Measured separation on bge-m3 is wide (~0.6 on topic vs ~0.3 off topic), so this
-# mainly exists to keep unrelated chunks out of the prompt when a question misses.
-TOP_K = 6
-MIN_RELEVANCE = 0.45
 
 SYSTEM_PROMPT = SystemMessage(
     content="""You are Sarathi, the IOE entrance and admission assistant -- a guide for \

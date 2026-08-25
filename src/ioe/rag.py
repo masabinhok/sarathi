@@ -50,6 +50,12 @@ SKIP_DIRS = {"downloads", "data", "engineering"}
 MAX_CHUNK = 1200
 CHUNK_OVERLAP = 150
 
+# Chunks retrieved per question, and the cosine relevance floor a chunk must clear.
+# Measured separation on bge-m3 is wide (~0.6 on topic vs ~0.3 off topic), so this
+# mainly exists to keep unrelated chunks out of the prompt when a question misses.
+TOP_K = 6
+MIN_RELEVANCE = 0.45
+
 
 def _split_frontmatter(text: str) -> tuple[dict, str]:
     """Return (metadata, body). Documents without frontmatter yield an empty dict."""

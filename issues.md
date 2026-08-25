@@ -20,7 +20,7 @@ the open list and take the next free number.
 | [9](#9--guide-the-bot-to-answer-smartly) | Guide the bot to answer smartly | prompt / graph |
 | [10](#10--play-with-the-bot-and-fix-what-breaks) | Play with the bot and fix what breaks | prompt / graph |
 
-### Closed — 17
+### Closed — 18
 
 | # | Issue | Status |
 | --- | --- | --- |
@@ -41,6 +41,7 @@ the open list and take the next free number.
 | [19](#19--fixed--it-answers-in-hindi-when-asked-for-nepali) | It answers in Hindi when asked for Nepali | `FIXED` |
 | [20](#20--fixed--the-theme-colour-barely-shows) | The theme colour barely shows | `FIXED` |
 | [21](#21--fixed--the-pass-list-lookup-only-took-a-form-number-or-a-rank) | The pass list lookup only took a form number or a rank | `FIXED` |
+| [22](#22--fixed--it-answers-questions-outside-its-scope-and-then-loses-the-thread) | It answers questions outside its scope, and then loses the thread | `FIXED` |
 
 ---
 
@@ -347,3 +348,71 @@ both correctly refused with a request to narrow down; the Kathmandu topper answe
 correctly with the subset caveat stated; a real candidate (Prabesh Giri) asked about under
 the wrong district (Kathmandu instead of Chitawan) got the honest mismatch answer instead
 of a false negative; and the Kathmandu-quota and eSewa control questions were unaffected.
+
+## 22 · `FIXED` · It answers questions outside its scope, and then loses the thread
+
+> the small talk might have slipped, and now it ansers questions out of its main scope,
+> also seems like it doesnot even remember the last conversation
+
+The reported transcript: `hello` answered normally, `lets go on a holiday` answered with a
+six-point holiday-planning questionnaire, and then `bahamas` — the student answering that
+questionnaire — met with confusion about why the Bahamas had come up.
+
+Two complaints, one cause. The memory was never broken: in a clean thread,
+`what is the entrance exam fee?` → `hello` → `what did i just ask you about?` recalls the
+fee correctly. What breaks memory is the off-scope answer itself. Once a holiday
+questionnaire is in the transcript, `bahamas` gets retrieved against and reasoned about as
+if it were an IOE question, and every turn after it is incoherent. "It forgot" is the
+symptom; answering the holiday question is the bug.
+
+The small-talk gate from the previous change was not the culprit either — `is_small_talk`
+returns False for "lets go on a holiday", "bahamas", "holiday" and "lets go". Nothing had
+slipped. There simply was no scope check anywhere in the graph: the system prompt asked
+the model to stay on topic, and with 6,000 characters of retrieved context in front of it,
+it did not.
+
+So the check became a node. `guard` sits between `lookup_result` and `chat_node` and
+decides whether the question is answered at all; on a refusal the graph goes to `refuse`,
+which emits the app's own sentence with no model call and no citations.
+
+Three signals, cheapest first:
+
+- **An exact pass-list hit passes, free.** A bare form number is in scope by construction.
+- **A YES/NO classifier on the student's own words.** Framing mattered more than anything
+  else here. The first version asked IN or OUT and scored 26/39 — 17/17 on out-of-topic
+  but only 9/22 on real questions, which is the wrong error to make. Reframed as "could
+  this plausibly be about IOE? When in doubt, say YES", it scored 36/39. A third framing
+  (ANSWER/REFUSE) was worse at 32/39.
+- **A relevance rescue, only to overturn a NO.** `best_match` scores the raw question
+  against the index; ≥ 0.60 answers anyway. This exists because the classifier's remaining
+  misses are real questions with vocabulary it does not recognise — "how do I pay with
+  eSewa" reads as shopping and scores 0.62.
+
+Two things this cost, both found by measurement rather than reasoning:
+
+- **Retrieval score alone cannot decide scope.** The distributions overlap badly: in-scope
+  0.435–0.700, off-scope 0.357–0.573. "how do I apply to Kathmandu University" (0.573)
+  outranks "how many seats are there in pulchowk" (0.478). That is why relevance is a
+  rescue and not the test.
+- **The signal must be read off the student's words, not the rewritten query.** The first
+  attempt guarded the classifier against that and then read relevance off the rewrite —
+  and `rewrite_query` had turned "lets go on a holiday" into "IOE admission documents for
+  holiday related scholarships", scoring 0.615, and "bahamas" into "IOE admission
+  documents for Bahamas", scoring 0.646. Both sailed through the rescue. A signal the
+  pipeline itself made IOE-shaped cannot be used to judge whether something is IOE.
+
+But judging the message alone then broke bare follow-ups: `what did i just ask you about?`
+and `how many are there?` carry no topic at all, and were refused. The distinction that
+matters is between the *rewrite*, which injects IOE words into the student's message, and
+the *transcript*, which is what was actually said. So the classifier is shown the last two
+turns verbatim, with the rule that a message which only makes sense as a follow-up
+continues whatever came before. On a 27-case matrix that scored 26/27, the one miss being
+the eSewa question the rescue already covers.
+
+Verified against the live bot, 32 checks: the reported transcript now refuses both
+off-topic turns and still answers `so when is the entrance exam?` with a citation; 10/10
+off-topic questions refused (~1.5s each, no model call); 10/10 real questions answered;
+8/8 bare follow-ups answered, including the two that regressed; small talk still returns
+in under a second. Refusals are stored on state so a reloaded conversation shows the same
+sentence, and `api._stream` sends it explicitly — the `refuse` node makes no model call, so
+it streams no tokens of its own.

@@ -90,20 +90,24 @@ def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
 
-async def _finished_sources(thread_id: str) -> list[dict] | None:
-    """Citations for the answer just written, read back off the checkpoint.
+async def _finished_turn(thread_id: str) -> tuple[str, list[dict] | None]:
+    """The refusal and the citations for the turn just taken, off the checkpoint.
 
-    They ride on the finished message rather than in the token stream, since retrieval
-    knows its documents before the first token and the student reads them after the last.
-    A failure here costs the citations only -- never the answer the student already has.
+    Both ride on the finished state rather than in the token stream. Citations do
+    because retrieval knows its documents before the first token while the student reads
+    them after the last; the refusal does because graph.refuse writes it without calling
+    the model, so there are no tokens for it to arrive as. A failure here costs the
+    citations -- never the answer the student already has.
     """
     try:
         chatbot = await get_chatbot()
         state = await chatbot.aget_state(_config(thread_id))
     except Exception:  # noqa: BLE001 - an uncited answer still beats a truncated stream
-        return None
-    messages = state.values.get("messages", []) if state.values else []
-    return messages[-1].additional_kwargs.get("sources") if messages else None
+        return "", None
+    values = state.values or {}
+    messages = values.get("messages", [])
+    sources = messages[-1].additional_kwargs.get("sources") if messages else None
+    return values.get("refusal") or "", sources
 
 
 # How long a generated title may keep the student waiting once their answer is complete.
@@ -157,7 +161,11 @@ async def _stream(message: str, thread_id: str, client_id: str) -> AsyncIterator
     except Exception as exc:  # noqa: BLE001 - any failure must reach the UI, not stall the stream
         yield _sse("error", {"message": str(exc)})
 
-    sources = await _finished_sources(thread_id)
+    refusal, sources = await _finished_turn(thread_id)
+    # The guard turned the question away, so no answer was generated and no token has
+    # been sent. The student still needs to be told, in the app's own words.
+    if refusal:
+        yield _sse("token", {"text": refusal})
     if sources:
         yield _sse("sources", {"sources": sources})
 

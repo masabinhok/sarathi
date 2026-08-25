@@ -2,7 +2,7 @@ import asyncio
 import re
 
 import aiosqlite
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph import END, START, StateGraph
@@ -151,6 +151,8 @@ class ChatState(MessagesState):
     context: str
     lookup: str
     sources: list[dict]
+    # The refusal the guard wrote if it turned the question away, or "".
+    refusal: str
 
 
 model = ChatOllama(model=TEXT_MODEL, base_url=OLLAMA_URL)
@@ -393,6 +395,7 @@ def small_talk(state: ChatState) -> dict:
         "context": "",
         "lookup": "",
         "sources": [],
+        "refusal": "",
     }
 
 
@@ -410,6 +413,142 @@ def lookup_result(state: ChatState) -> dict:
     # The raw message, not the rewritten or translated one: both of those go through the
     # model, and a form number that survives a paraphrase may not survive a translation.
     return {"lookup": lookup_context(state["messages"][-1].content)}
+
+
+# ── Keeping to the subject ────────────────────────────────────────────────────
+# SYSTEM_PROMPT says to refuse anything that is not IOE admission, and on its own that
+# does not hold either. Asked "lets go on a holiday", the assistant produced a six-point
+# holiday-planning questionnaire; the next message, "bahamas", then arrived in a prompt
+# stuffed with IOE fee documents and the model could make no sense of it. The second
+# failure looked like lost memory and was not -- history was intact, and asked outright
+# the model recalled the earlier turns correctly. It was the first failure spreading:
+# once an off-topic answer is in the transcript, every turn after it is incoherent.
+#
+# So the decision is taken out of the answering prompt and made on its own, where the
+# model has one thing to weigh instead of ninety lines of instructions. Three signals,
+# and refusing needs all three to agree, because refusing is the damaging mistake: a
+# student turned away with a real question has no way to appeal, while an off-topic
+# answer costs a few wasted seconds.
+#
+#   1. An exact pass list hit. A form number was found in the published table -- that is
+#      not a judgement call and nothing overrides it.
+#   2. The classifier. On its own it never once let an off-topic question through in 17
+#      tries, but it turned away 2 of 22 real ones, which is the wrong way round.
+#   3. So a NO gets a second opinion: how well the question matches the documents.
+#      Measured over 39 questions, both real questions the classifier misread scored
+#      above this line ("how do I pay with eSewa", 0.700) and nothing off topic reached
+#      it (the closest, "how do I apply to Kathmandu University", 0.573). Below it the
+#      question is merely unmatched, not off topic -- "how many seats are there in
+#      pulchowk" only reaches 0.478.
+#
+# Signal 3 is measured here, against the student's own words, rather than read off what
+# retrieve already scored. That score belongs to the rewritten query, and the rewrite is
+# what makes a follow-up IOE-shaped: "lets go on a holiday", asked after a greeting, was
+# condensed into "IOE admission documents for holiday related scholarships" and scored
+# 0.615 on it. A signal that the pipeline itself contaminated cannot be used to overrule
+# the one honest reading of the question. Running it only to overturn a NO also keeps it
+# off the common path, where it would cost an embedding call for nothing.
+SCOPE_RESCUE = 0.60
+
+# Judged on the student's own words, never on the rewritten search query. The rewrite
+# resolves a follow-up against the conversation, which for "bahamas" produced something
+# with IOE in it -- and a guard that reads a query the pipeline just made IOE-shaped is a
+# guard that passes everything. The transcript below the message is the conversation as it
+# actually happened, which is a different thing: "how many are there?" is a real question
+# about whatever was just discussed, and judged alone it looks like nothing at all.
+SCOPE_PROMPT = """Sarathi answers questions about applying to the Institute of \
+Engineering (IOE), Tribhuvan University, Nepal -- its entrance exam, results, fees, \
+forms, quotas, documents, deadlines, campuses, programs, notices -- and questions about \
+Sarathi itself.
+
+{history}Read the student's message. Could it plausibly be one of those? Say YES.
+Say NO only if the message is clearly about something else entirely: another university, \
+another country, coding, homework, general knowledge, news, travel, health, shopping, or \
+personal life.
+
+A short message that only makes sense as a follow-up to the conversation above -- \
+"how many are there?", "what about the fees?", "what did I just ask?" -- continues \
+whatever that conversation was about. Say YES.
+
+When in doubt, say YES.
+
+Message: {question}
+
+YES or NO:"""
+
+# The app's own words again, for the same reason they are the app's own in
+# english_only_preface: asked to write its own refusal, the model writes a paragraph and
+# then answers the question anyway.
+OFF_TOPIC_SENTENCE = (
+    "I only handle questions about IOE admissions and the IOE entrance exam, so I have "
+    "to leave that one alone. Ask me about the exam, your application, the fees, a "
+    "result, or a campus and I can help."
+)
+
+
+def recent_exchange(messages: list, turns: int = 2) -> str:
+    """The last few turns verbatim, so a bare follow-up can be read in context."""
+    lines = []
+    for message in messages[-(turns * 2 + 1) : -1]:
+        speaker = "student" if isinstance(message, HumanMessage) else "Sarathi"
+        said = " ".join((message.content or "").split())
+        if said:
+            lines.append(f"{speaker}: {said[:400]}")
+    return "\n".join(lines)
+
+
+def is_in_scope(question: str, history: str = "") -> bool:
+    """Whether the question is plausibly about IOE admission. Errs towards yes."""
+    preamble = f"So far in this conversation:\n{history}\n\n" if history else ""
+    try:
+        verdict = model.invoke(
+            [
+                HumanMessage(
+                    content=SCOPE_PROMPT.format(history=preamble, question=question)
+                )
+            ]
+        )
+    except Exception:  # noqa: BLE001 - a guard that cannot run must not refuse the student
+        return True
+    return not (verdict.content or "").strip().upper().startswith("NO")
+
+
+def best_match(question: str) -> float:
+    """How well the question itself matches the documents, ignoring the rewrite."""
+    try:
+        hits = get_store().similarity_search_with_relevance_scores(
+            question, k=TOP_K * 2
+        )
+    except Exception:  # noqa: BLE001 - an unbuilt index is not evidence of anything
+        return 0.0
+    ordered = rerank(question, hits)
+    return ordered[0][1] if ordered else 0.0
+
+
+def guard(state: ChatState) -> dict:
+    """Decide whether this question is answered at all."""
+    if state.get("lookup"):
+        return {"refusal": ""}
+    messages = state["messages"]
+    question = state.get("question") or messages[-1].content
+    history = recent_exchange(messages)
+    if is_in_scope(question, history) or best_match(question) >= SCOPE_RESCUE:
+        return {"refusal": ""}
+    return {"refusal": OFF_TOPIC_SENTENCE}
+
+
+def refuse(state: ChatState) -> dict:
+    """Turn the question away in the app's own words, with no model call at all.
+
+    Nothing is cited, because nothing was read. api._stream sends this text to the
+    student; it is stored here so a reloaded conversation shows the same refusal rather
+    than an empty turn.
+    """
+    return {"messages": AIMessage(content=state["refusal"])}
+
+
+def route_scope(state: ChatState) -> str:
+    return "refuse" if state.get("refusal") else "chat_node"
 
 
 def chat_node(state: ChatState) -> dict:
@@ -488,6 +627,8 @@ graph.add_node("rewrite_query", rewrite_query)
 graph.add_node("retrieve", retrieve)
 graph.add_node("lookup_result", lookup_result)
 graph.add_node("small_talk", small_talk)
+graph.add_node("guard", guard)
+graph.add_node("refuse", refuse)
 graph.add_node("chat_node", chat_node)
 
 graph.add_conditional_edges(
@@ -498,7 +639,11 @@ graph.add_conditional_edges(
 graph.add_edge("small_talk", "chat_node")
 graph.add_edge("rewrite_query", "retrieve")
 graph.add_edge("retrieve", "lookup_result")
-graph.add_edge("lookup_result", "chat_node")
+graph.add_edge("lookup_result", "guard")
+graph.add_conditional_edges(
+    "guard", route_scope, {"refuse": "refuse", "chat_node": "chat_node"}
+)
+graph.add_edge("refuse", END)
 graph.add_edge("chat_node", END)
 
 

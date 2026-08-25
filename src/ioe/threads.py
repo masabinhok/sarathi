@@ -27,7 +27,7 @@ from pathlib import Path
 from langchain_core.messages import HumanMessage
 from langchain_ollama import ChatOllama
 
-from ioe.rag import OLLAMA_URL
+from ioe.rag import NUM_CTX, OLLAMA_URL
 
 # Beside the notice cache, on the same volume: a conversation a student can come back to
 # has to outlive the container that answered it.
@@ -55,8 +55,15 @@ Title:"""
 
 # Small budget: a title is a handful of tokens, and capping the generation is what keeps
 # this from becoming a second answer the student is waiting on.
+# num_ctx matches graph.model deliberately. It is a load-time option, so a second value
+# here would have Ollama load a second runner -- on turn one, when this model and the
+# answering model both run, and on a card with room for one.
 title_model = ChatOllama(
-    model=TITLE_MODEL, base_url=OLLAMA_URL, num_predict=24, temperature=0.2
+    model=TITLE_MODEL,
+    base_url=OLLAMA_URL,
+    num_ctx=NUM_CTX,
+    num_predict=24,
+    temperature=0.2,
 )
 
 

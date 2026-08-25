@@ -18,6 +18,27 @@ EMB_MODEL = "bge-m3:latest"
 # A container's own localhost is not the host's, so where Ollama lives is configurable.
 OLLAMA_URL = os.environ.get("OLLAMA_BASE_URL") or "http://localhost:11434"
 
+# Every ChatOllama in this process must be constructed with this value.
+#
+# Left unset, Ollama serves qwen2.5:7b at 4096 tokens -- measured on the running server,
+# /api/ps reporting "context_length": 4096 -- and a real fee question assembles about
+# 5,300 tokens of prompt before the conversation is added to it: 2,131 for the system
+# prompt, 1,656 for six retrieved chunks, 1,161 for the worked fee figures, the rest for
+# the notice feed and the date blocks. What does not fit is dropped, silently and without
+# an error, and the system prompt is dropped first because it is at the front.
+#
+# Measured directly: an 8,040-token prompt sent at 4096 evaluated only 2,050 tokens, and
+# the model answered from the filler at the end rather than from the instruction at the
+# start, which it never saw. The same prompt at 8192 evaluated 8,037 and answered
+# correctly. Every prompt rule this app has added over twenty-three issues has been
+# competing for a window half the size it needed.
+#
+# 16384 measured at 5.47 GB of VRAM against the 8.19 GB card this runs on, against 4.99 GB
+# at 8192 -- the headroom is worth more than the half gigabyte. num_ctx is a load-time
+# option, so two ChatOllama instances that disagree about it make Ollama hold two runners,
+# and two runners do not fit. Hence: one constant, here, next to the URL they all share.
+NUM_CTX = 16384
+
 emb_model = OllamaEmbeddings(model=EMB_MODEL, base_url=OLLAMA_URL)
 
 DOCS_DIR = Path(__file__).resolve().parents[2] / "docs"

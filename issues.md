@@ -11,7 +11,7 @@ the open list and take the next free number.
 | `BUILT` | A question that turned into a feature; the decision record is kept with it. |
 | `SATISFIED` | Good enough; not being chased further. |
 
-### Open — 4
+### Open — 7
 
 | # | Issue | Area |
 | --- | --- | --- |
@@ -19,8 +19,11 @@ the open list and take the next free number.
 | [8](#8--rethink-the-apps-scope) | Rethink the app's scope | product |
 | [9](#9--guide-the-bot-to-answer-smartly) | Guide the bot to answer smartly | prompt / graph |
 | [10](#10--play-with-the-bot-and-fix-what-breaks) | Play with the bot and fix what breaks | prompt / graph |
+| [24](#24-answering-scope) | Answering scope | prompt / graph |
+| [25](#25-supervisor-queries) | Supervisor queries | feature |
+| [26](#26-my-query) | Simplify onto a tool-calling agent | architecture |
 
-### Closed — 19
+### Closed — 20
 
 | # | Issue | Status |
 | --- | --- | --- |
@@ -43,6 +46,7 @@ the open list and take the next free number.
 | [21](#21--fixed--the-pass-list-lookup-only-took-a-form-number-or-a-rank) | The pass list lookup only took a form number or a rank | `FIXED` |
 | [22](#22--fixed--it-answers-questions-outside-its-scope-and-then-loses-the-thread) | It answers questions outside its scope, and then loses the thread | `FIXED` |
 | [23](#23--fixed--it-gets-the-fee-arithmetic-wrong) | It gets the fee arithmetic wrong | `FIXED` |
+| [27](#27--fixed--the-model-never-saw-its-own-system-prompt) | The model never saw its own system prompt | `FIXED` |
 
 ---
 
@@ -496,6 +500,58 @@ application form fee, which are different money answered by the payment notices.
 interaction bug surfaced and was fixed on the way: "how much is the health insurance fee"
 was being *refused*, because `guard`'s classifier reads "health" as a health question. The
 40-case regression from `22` still passes in full.
+
+## 27 · `FIXED` · The model never saw its own system prompt
+
+Found while investigating `24`, which reports the prompts as "too long and so
+ineffective". They are worse than ineffective. They were frequently not there.
+
+`ChatOllama(model=TEXT_MODEL, base_url=OLLAMA_URL)` set no `num_ctx`, so Ollama served
+qwen2.5:7b at its own default of **4,096 tokens** — confirmed on the running server,
+`/api/ps` reporting `"context_length": 4096`. A real first-turn fee question assembles
+about **5,318 tokens** before the conversation is added to it:
+
+| Block | Tokens |
+| --- | ---: |
+| `SYSTEM_PROMPT` | 2,131 |
+| Reference documents (6 chunks) | 1,656 |
+| Worked fee figures | 1,161 |
+| Notice feed | 315 |
+| Today's date + conversions | 52 |
+| **Total, turn one, no history** | **5,318** |
+
+What does not fit is discarded, silently, with no error and no warning in the response.
+And `SYSTEM_PROMPT` is at the front, so it goes first.
+
+Measured directly rather than inferred. A prompt of 8,040 tokens — a `system` message
+carrying one instruction, a wall of filler, then the question — sent at the default
+window evaluated only **2,050** tokens and answered from the filler; the instruction it
+was given first, it never saw. The same prompt at `num_ctx=8192` evaluated **8,037** and
+answered correctly. So every rule these twenty-three issues added — the scope rule, the
+citation rule, the date rule, the nine bullets on reading a pass list — has been
+competing for a window half the size it needed, and losing.
+
+`NUM_CTX = 16384` now lives in `rag.py` beside `OLLAMA_URL`, and **both** `ChatOllama`
+instances take it. That second part is not tidiness: `num_ctx` is a load-time option, so
+`graph.model` at 16384 and `threads.title_model` at the default would have Ollama hold
+two runners — on turn one, when both run, on a card with room for one. Verified after a
+first turn: one resident model, `context_length: 16384`, 5.47 GB of 8.19 GB. 8192 was the
+cheaper option at 4.99 GB and was not taken; the worst-case prompt leaves too little slack
+against it, and slack is the entire point.
+
+The nine-line Language paragraph came out of `SYSTEM_PROMPT` at the same time, leaving one
+sentence. It named the "answer in Nepali" request four times on every turn, and `19`
+already records that naming the request is what keeps it alive; `read_in_english` does the
+work now.
+
+**What this fixed, and what it did not.** Replaying `24`'s conversation twice: the
+hallucination is gone — no more BBA, B.Sc., BSBA or PhD programmes invented for IOE — and
+the fee answer is correct and well framed (NPR 19,269 on admission day, NPR 68,887 net of
+deposits). What remains wrong is exactly what `24` is about: `what is its source` and
+`foreign?` are still refused, because the scope guard judges them as messages rather than
+as follow-ups, and `and what other cateogry i could study in` still answers from memory
+instead of saying the documents do not cover it. Those are the guard and the missing
+"no evidence" path, and they are the branch's job, not this fix's.
 
 ## 24. answering scope
 

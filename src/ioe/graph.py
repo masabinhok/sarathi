@@ -13,6 +13,7 @@ from ioe.fees import FEE_SOURCE, fee_context
 from ioe.notices import digest as notice_digest
 from ioe.rag import (
     MAX_SOURCES,
+    NUM_CTX,
     OLLAMA_URL,
     format_context,
     get_store,
@@ -49,15 +50,7 @@ universities, personal advice -- you must refuse. Do not answer the off-topic qu
 even partially. Say in one sentence that you only handle IOE admission and entrance \
 questions, then invite them to ask one.
 
-Language: you write in English. Always, in every answer, whatever language the question \
-was written in and whatever language the student asks you to use. Students are welcome \
-to write to you in Nepali or any other language -- understand the question and answer \
-it -- but the answer itself is English. Two reasons, and you may give them: the notices \
-you answer from are English, and your Nepali is not good enough to give a student \
-information they will act on. If a student asks you to reply in another language, say in \
-one sentence that you answer only in English, then answer their question in English \
-anyway. You may still quote a Nepali term from a notice in brackets after the English \
--- naming the official wording is not switching language.
+Language: you write in English. Always.
 
 Using a pass list lookup:
 - A "Pass list lookup" block below is an exact record from the published result table, not a guess. Never alter a rank, name, or district from it.
@@ -159,7 +152,7 @@ class ChatState(MessagesState):
     refusal: str
 
 
-model = ChatOllama(model=TEXT_MODEL, base_url=OLLAMA_URL)
+model = ChatOllama(model=TEXT_MODEL, base_url=OLLAMA_URL, num_ctx=NUM_CTX)
 
 
 # ── Keeping the answer in English ─────────────────────────────────────────────
@@ -179,6 +172,11 @@ model = ChatOllama(model=TEXT_MODEL, base_url=OLLAMA_URL)
 # is stripped out of the question, the app says the one thing that needs saying, and the
 # model is handed an ordinary question -- which it answers in English, because that is
 # what it does with ordinary questions.
+#
+# SYSTEM_PROMPT is down to one line on the subject for the same reason. The paragraph it
+# used to carry explained the rule, offered two justifications the model could pass on,
+# and told it what to do when asked for Nepali -- nine lines that named the request four
+# times, in the prompt, on every turn, including the turns nobody asked.
 
 _DEVANAGARI = re.compile(r"[\u0900-\u097f]")
 _LATIN = re.compile(r"[A-Za-z]")

@@ -706,3 +706,33 @@ also, we should directly give a strict prompt of do not ever answer in any other
 and also enforce the incoversation context more, through summarization. instead of refusing to answer query unrelated to ioe, it should try to answer every query being releavent to ioe, like if somnething doesnot match any docuemtn semantically, no ioe doesnot offer that, or include that. kind of asnwer crafted by the llm based on strcutured output. 
 
 let's work on a different branch leave the main branch as it is, and experiment with a simple langgraph agent with tool calling capabilities, or hitl also when fetching notices, stm, ltm for more robus convos.
+
+
+
+## new issues: 
+
+1. i think we should fetch notices from all the constituent campuses, and IOE, not from TU
+ a. https://entrance.ioe.edu.np/
+ b. https://admission.ioe.edu.np/be/2083/
+ c. https://admission.tcioe.edu.np/be/2083/
+ d. https://admission.ioecc.edu.np/
+ e. https://pcampus.edu.np/category/admission-notices/
+ f. https://admission.ioepc.edu.np/notices/list
+ g. https://ioepas.edu.np/category/news-notices/admission-notice
+
+ only fetch from these sites, for site not specific for admssion like pcampous and ioepas, strictly fetch notices from admission category only... this is realted to admission and entrance only. Also can we page the notices, or like make it scrolalble or just give a friendly ux.
+
+ 2. is there anyway, we can build an ongoing ocr pipeline on the notices that are coming freshly from these sites and ingest to our current model, so that it has the ability to answer on latest docs. ofcourse we will inject the ability/tools to calculate priority, fees, rank, idk everything related that's evergreen functions, feeding on latest data.
+
+ 3. so i have got a good data for cutoffs for year 2079-2082. 
+ https://ioe-entrance.bibeksubedi0001.com.np/ioe-cutoff-rank (all 4 campus) except chitwan
+ https://ioe-entrance.bibeksubedi0001.com.np/ioe-cutoff-rank/pulchowk-campus, if we go inside, we get all 4 years cutoff.
+ we could fetch these data into a csv file and prepare a genuine cutoff rank answers to students.
+ for this; do we have the accurate courses provided and seats allocated for these 5 campuses or 4 excpete chitwan??
+
+ 4. so, if it's possible to fetch the current priority list, for pcampus only (experiment) and can we determine the chances of a student geting the course he chosed, by arithmetic of availables seats, his priority, high rankers(1 is high) choosing the subject as priority and every factor considered(quota) can we build this evergreen arithmetic that runs on any data provided(csv) each year we just have to update the prioirty list csv and it calucaltes across htes campuses
+ (this is for after filling priority form, issue 3 is for before filling priority form guessing it.)
+
+ 5. replace with genuine, differentitaing questions as starting quesions as example in the ask section.
+
+

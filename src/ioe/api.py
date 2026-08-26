@@ -95,7 +95,7 @@ async def _finished_turn(thread_id: str) -> tuple[str, list[dict] | None]:
 
     Both ride on the finished state rather than in the token stream. Citations do
     because retrieval knows its documents before the first token while the student reads
-    them after the last; the refusal does because graph.refuse writes it without calling
+    them after the last; the refusal does because graph.deflect writes it without calling
     the model, so there are no tokens for it to arrive as. A failure here costs the
     citations -- never the answer the student already has.
     """
@@ -109,6 +109,13 @@ async def _finished_turn(thread_id: str) -> tuple[str, list[dict] | None]:
     sources = messages[-1].additional_kwargs.get("sources") if messages else None
     return values.get("refusal") or "", sources
 
+
+# The one node whose tokens are the answer. The graph runs the model more than once a
+# turn -- the planner picks tools, memory.summarize writes the rolling summary -- and
+# every one of those calls streams chunks past here carrying its own node name. Filtering
+# on this name is what makes the token stream the answer and nothing else; the planner's
+# TAG_NOSTREAM is a second layer, not the guarantee.
+FINAL_NODE = "answer"
 
 # How long a generated title may keep the student waiting once their answer is complete.
 # Past this the opening question stands in, and the model's version is dropped rather
@@ -151,9 +158,15 @@ async def _stream(message: str, thread_id: str, client_id: str) -> AsyncIterator
             yield _sse("token", {"text": preface})
 
         async for chunk, metadata in stream:
-            # The graph also calls the model to rewrite follow-up queries for retrieval;
-            # only the answer node's tokens belong in the UI.
-            if metadata.get("langgraph_node") != "chat_node":
+            if metadata.get("langgraph_node") != FINAL_NODE:
+                continue
+            # The answer node invokes graph.model, which has no tools bound, so a tool
+            # call cannot be generated here at all. Checked anyway: the cost is an
+            # attribute lookup per chunk, and the failure it guards against is raw
+            # tool-call JSON rendered to a student as if it were the answer.
+            if getattr(chunk, "tool_calls", None) or getattr(
+                chunk, "tool_call_chunks", None
+            ):
                 continue
             text = chunk.content
             if text:
@@ -162,8 +175,10 @@ async def _stream(message: str, thread_id: str, client_id: str) -> AsyncIterator
         yield _sse("error", {"message": str(exc)})
 
     refusal, sources = await _finished_turn(thread_id)
-    # The guard turned the question away, so no answer was generated and no token has
-    # been sent. The student still needs to be told, in the app's own words.
+    # graph.deflect turned the question away, so no answer was generated and no token
+    # has been sent. The student still needs to be told, in the app's own words. This
+    # path is narrower than the scope guard it replaces -- one task-substitution
+    # detector, not a classifier -- but it is not gone, so neither is this branch.
     if refusal:
         yield _sse("token", {"text": refusal})
     if sources:

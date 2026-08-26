@@ -162,6 +162,12 @@ ul.ruled .txt {
 ul.ruled .txt em { font-style: italic; color: var(--mute); }
 ul.ruled .txt b { font-weight: 500; }
 ul.ruled li.warn .lbl { color: var(--crimson); }
+.lbl .sym { text-transform: none; }
+/* Slides carrying one item more than the base rhythm tighten rather than shrink type. */
+.body.tight .standfirst { margin-bottom: 26px; font-size: 32px; }
+.body.tight ul.ruled li { padding: 18px 0; }
+.body.tight ul.ruled .txt { font-size: 33px; line-height: 1.32; }
+.body.tight h2 { font-size: 76px; margin-bottom: 6px; }
 
 /* Figures: lapis because they are computed, mono because they are exact. */
 .fig { font-family: var(--mono); font-weight: 500; color: var(--lapis); font-variant-numeric: tabular-nums; }
@@ -297,6 +303,29 @@ table.ev tr.miss td { color: var(--crimson); }
 .caret { display: inline-block; width: 11px; height: 27px; background: var(--lapis); vertical-align: -4px; margin-left: 3px; animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 
+
+/* === INGESTION PIPELINE STRIP (corpus slide) === */
+.pipe { display: flex; align-items: stretch; gap: 0; margin: 10px 0 0; }
+.pstep {
+    font-family: var(--mono); font-size: 19px; font-weight: 500; color: var(--ink);
+    border: 1px solid var(--rule-strong); padding: 14px 17px; white-space: nowrap;
+    display: flex; flex-direction: column; gap: 6px; background: transparent;
+}
+.pstep i { font-family: var(--serif); font-style: italic; font-size: 20px; color: var(--faint); font-weight: 300; }
+.pstep.lap { border-color: var(--lapis); color: var(--lapis); background: var(--lapis-soft); }
+.pstep.lap i { color: var(--lapis); opacity: .8; }
+.parrow { flex: 1; align-self: center; height: 1px; background: var(--rule-strong); position: relative; min-width: 22px; }
+.parrow::after {
+    content: ""; position: absolute; right: 0; top: -3.5px;
+    border-left: 7px solid var(--rule-strong); border-top: 4px solid transparent; border-bottom: 4px solid transparent;
+}
+/* graph nodes carry a sub-label on the architecture slide */
+.node i { display: block; font-family: var(--serif); font-style: italic; font-size: 19px;
+          color: var(--faint); font-weight: 300; margin-top: 5px; }
+.node.plain i { color: var(--faint); }
+ul.ruled .lbl.warn { color: var(--crimson); }
+.claims p { line-height: 1.42; }
+
 /* === REVEAL ANIMATION ===
    One orchestrated entrance per slide, staggered. Nothing moves after that. */
 .slide.active .reveal { animation: rise .78s cubic-bezier(.2,.72,.2,1) both; }
@@ -339,9 +368,9 @@ body.editing [contenteditable="true"]:focus { outline: 2px solid var(--lapis); o
 
 <!-- ============ 1 · TITLE ============ -->
 <section class="slide title-slide active">
-    <div class="masthead reveal d1" style="border-bottom-width:2px">
-        <span class="eyebrow">Institute of Engineering · Minor Project Defense</span>
-        <span class="eyebrow r">Tribhuvan University · Pulchowk</span>
+    <div class="masthead reveal d1">
+        <span class="eyebrow">Minor Project Defense · BE Computer Engineering</span>
+        <span class="eyebrow r">Pulchowk Campus, IOE, Tribhuvan University</span>
     </div>
     <div class="t-dateline reveal d2">
         <div class="bs">२०८३<br>भाद्र ११</div>
@@ -350,84 +379,206 @@ body.editing [contenteditable="true"]:focus { outline: 2px solid var(--lapis); o
     <div class="t-body">
         <h1 class="reveal d2">Sarathi</h1>
         <p class="t-deva reveal d3">सारथी</p>
-        <p class="t-lede reveal d4">A retrieval-backed assistant for the IOE entrance and admission process — <em>every figure traced to a published notice, and nothing leaving the machine it runs on.</em></p>
+        <p class="t-lede reveal d4">A Retrieval-Augmented Assistant for <b>IOE Entrance and Admission Guidance</b> — answering from the official notices alone, and computing every figure a student may act upon.</p>
     </div>
     <div class="claims reveal d5">
-        <div><b>Seven sources</b><p>Every constituent campus and both IOE boards, unified.</p></div>
-        <div><b>64 / 66</b><p>An evaluation suite that asserts evidence, not prose.</p></div>
-        <div class="warn"><b>Never guesses</b><p>When the documents are silent, it says so.</p></div>
+        <div><b>Presented by</b><p>Sabin Shrestha · 080BCT069<br>Sachin K.C. · 080BCT070</p></div>
+        <div><b>Supervisor</b><p>Surendra Shrestha, PhD<br>Reader, DOECE</p></div>
+        <div><b>Department</b><p>Electronics &amp; Computer<br>Engineering</p></div>
     </div>
     <div class="colophon reveal d6">
-        <span><b>Sabin Shrestha · Sachin</b></span>
-        <span>qwen2.5:7b + bge-m3 · one 8 GB GPU · no API keys</span>
+        <span><b>Sarathi</b> · minor project report submitted 2026-08-26</span>
+        <span>qwen2.5:7b + bge-m3 · runs entirely on local hardware</span>
     </div>
 </section>
 
 <!-- ============ 2 · THE PROBLEM ============ -->
 <section class="slide">
-    <div class="masthead reveal d1"><span class="eyebrow">01 · The problem</span><span class="eyebrow r">Sarathi</span></div>
+    <div class="masthead reveal d1"><span class="eyebrow">01 · Problem statement</span><span class="eyebrow r">Report §1.2</span></div>
     <div class="body">
-        <h2 class="reveal d1">Everything a student needs is published.<br>None of it is in one place.</h2>
-        <p class="standfirst reveal d2">A candidate who has just passed the entrance exam has days to act, and the information is spread across sites that do not know about each other.</p>
+        <h2 class="reveal d1">The information is published.<br>It is not usable.</h2>
+        <p class="standfirst reveal d2">Several thousand candidates sit the IOE entrance examination each year. Everything they need exists — and none of it is answerable as written.</p>
         <ul class="ruled">
-            <li class="reveal d3"><span class="lbl">Seven sites</span><p class="txt">Two IOE boards and five campuses, each publishing its own notices on its own schedule.</p></li>
-            <li class="reveal d4"><span class="lbl">Two scripts</span><p class="txt">Notices arrive in Nepali and English — <em>often in the same document.</em></p></li>
-            <li class="reveal d5"><span class="lbl">Two calendars</span><p class="txt">Deadlines printed in Bikram Sambat; the student's phone shows Gregorian.</p></li>
-            <li class="reveal d6 warn"><span class="lbl">One wrong move</span><p class="txt">Decline a lower priority you were offered, and you are <b>out of the admission process entirely.</b></p></li>
+            <li class="reveal d3"><span class="lbl">Scattered</span><p class="txt">Six independent notice boards, each publishing on its own schedule.</p></li>
+            <li class="reveal d4"><span class="lbl">Not in English</span><p class="txt">Largely Nepali, dated in <b>Bikram Sambat</b>, distributed as <em>scanned PDFs that cannot be searched.</em></p></li>
+            <li class="reveal d5 warn"><span class="lbl">The gap gets<br>filled anyway</span><p class="txt">General assistants are consulted here and answer <b>confidently and often wrongly</b> — because a deadline, a fee, a merit rank or a seat count is exactly what a language model is least able to recall.</p></li>
+            <li class="reveal d6 warn"><span class="lbl">And the cost<br>is asymmetric</span><p class="txt">A wrong answer about a Python function costs minutes. A wrong answer about a submission deadline costs <b>an academic year.</b></p></li>
         </ul>
     </div>
-    <div class="colophon reveal d7"><span><b>Minor Project Defense</b></span><span>2</span></div>
+    <div class="colophon reveal d7"><span><b>Sarathi · Minor Project Defense</b></span><span>2</span></div>
 </section>
 
-<!-- ============ 3 · WHAT IT IS ============ -->
+<!-- ============ 3 · OBJECTIVES ============ -->
 <section class="slide">
-    <div class="masthead reveal d1"><span class="eyebrow">02 · What Sarathi is</span><span class="eyebrow r">Sarathi</span></div>
+    <div class="masthead reveal d1"><span class="eyebrow">02 · Objectives</span><span class="eyebrow r">Report §1.3</span></div>
+    <div class="body tight">
+        <h2 class="reveal d1">What we set out to build.</h2>
+        <p class="standfirst reveal d2"><b>General objective —</b> to design, implement and evaluate a retrieval-augmented conversational assistant giving accurate, source-attributed and calendar-aware answers on the IOE entrance examination and the admission process that follows it, operating entirely on locally hosted models.</p>
+        <ul class="ruled">
+            <li class="reveal d3"><span class="lbl">Specific · 1</span><p class="txt">Assemble and translate a corpus of official notices, index it in a persistent vector store, and implement retrieval and generation as an <b>explicit state graph</b> whose stages are separately addressable.</p></li>
+            <li class="reveal d4"><span class="lbl">Specific · 2</span><p class="txt">Answer exact-value questions — pass-list membership, fee totals, programme cut-offs, BS date arithmetic — by <b>lookup and computation rather than generation.</b></p></li>
+            <li class="reveal d5"><span class="lbl">Specific · 3</span><p class="txt">Attribute every answer to the documents it visibly used, and decline what the notices do not cover.</p></li>
+            <li class="reveal d6"><span class="lbl">Specific · 4</span><p class="txt">Deliver it as a responsive web interface with streaming answers, an aggregated notice feed and an extracted deadline list — and evaluate it against the failure modes it was built to remove.</p></li>
+        </ul>
+    </div>
+    <div class="colophon reveal d7"><span><b>Sarathi · Minor Project Defense</b></span><span>3</span></div>
+</section>
+
+<!-- ============ 4 · SCOPE ============ -->
+<section class="slide">
+    <div class="masthead reveal d1"><span class="eyebrow">03 · Scope</span><span class="eyebrow r">Report §1.5</span></div>
     <div class="body">
-        <h2 class="reveal d1">A question answered from the notices,<br>with the notice attached.</h2>
+        <h2 class="reveal d1">One cycle, one institution,<br>answered properly.</h2>
         <div class="hair reveal d2"></div>
         <div class="split">
             <div>
-                <div class="colhead reveal d3">It answers</div>
-                <p class="para reveal d3"><b>Fees</b> — worked totals, not a table to read.</p>
-                <p class="para reveal d4"><b>Seats</b> — every campus, every programme.</p>
-                <p class="para reveal d4"><b>Your result</b> — by form number, rank, name or district.</p>
-                <p class="para reveal d5"><b>Your chances</b> — against four published years of cutoffs.</p>
+                <div class="colhead reveal d3">The core — conversational retrieval</div>
+                <p class="para reveal d3">BE and BArch entrance and admission, IOE, for the <b>2083 BS (2026) cycle.</b></p>
+                <p class="para mute reveal d4">Eligibility · application procedure · corrections · examination structure and syllabus · fee payment through four electronic channels · quota documentation, domestic and foreign · result publication · campus and programme structure · deadlines · declaration of campus priorities.</p>
+                <p class="para reveal d5">This is what the <span class="fig">13</span> indexed notices answer, and it is the project's first responsibility.</p>
             </div>
             <div>
-                <div class="colhead reveal d3">It runs</div>
-                <p class="para reveal d3">Entirely on one machine. <span class="fig">qwen2.5:7b</span> generates, <span class="fig">bge-m3</span> embeds, both through Ollama on a single <span class="fig">8 GB</span> GPU.</p>
-                <p class="para mute reveal d5">No API key, no cloud inference, no per-student cost — and no question about a candidate's result ever leaves the building.</p>
+                <div class="colhead reveal d3">Four capabilities <em>beyond</em> retrieval</div>
+                <p class="para reveal d4"><b>Exact pass-list lookup</b> — by form number, merit rank, name or district.</p>
+                <p class="para reveal d4"><b>Deterministic fee computation</b> — every total a fee question can require, four categories.</p>
+                <p class="para reveal d5"><b>Historical priority analysis</b> — last-admitted rank per programme, Pulchowk.</p>
+                <p class="para reveal d5"><b>Aggregated notice feed</b> — listings from the official boards, both calendars.</p>
             </div>
         </div>
     </div>
-    <div class="colophon reveal d6"><span><b>Minor Project Defense</b></span><span>3</span></div>
+    <div class="colophon reveal d6"><span><b>Sarathi · Minor Project Defense</b></span><span>4</span></div>
 </section>
 
-<!-- ============ 4 · LIVE DEMO ============
-     The body is a live iframe of the running app. If it fails, press → once:
-     the next slide replays the same three answers. -->
+<!-- ============ 5 · CORPUS & INGESTION ============ -->
 <section class="slide">
-    <div class="masthead reveal d1"><span class="eyebrow">03 · Live</span><span class="eyebrow r">localhost:3000</span></div>
+    <div class="masthead reveal d1"><span class="eyebrow">04 · Corpus and ingestion</span><span class="eyebrow r">Report §3.6, §4.4.1</span></div>
+    <div class="body">
+        <h2 class="reveal d1">Fifteen scanned PDFs in.<br><span class="q">216 passages</span> out.</h2>
+        <div class="pipe reveal d2">
+            <span class="pstep">Official PDF<i>scanned, Nepali</i></span><span class="parrow"></span>
+            <span class="pstep">Markdown<i>translated, front matter</i></span><span class="parrow"></span>
+            <span class="pstep">Header split<i>h1 / h2 / h3</i></span><span class="parrow"></span>
+            <span class="pstep">Size split<i>s=1200, o=150</i></span><span class="parrow"></span>
+            <span class="pstep lap">Chroma<i>bge-m3, HNSW cosine</i></span>
+        </div>
+        <div class="split" style="margin-top:34px">
+            <div>
+                <div class="colhead reveal d4">Prepared by hand, on purpose</div>
+                <p class="para reveal d4">Translated <em>semantically</em>, not word-for-word. Nepali terms kept in parentheses on first use. Devanagari numerals converted; <b>BS dates left unconverted</b>, so the conversion machinery resolves them rather than the translator.</p>
+                <p class="para mute reveal d5">Every document records its own translation type, so a reader can tell reproduced text from translated text. The original PDF stays authoritative.</p>
+            </div>
+            <div>
+                <div class="colhead reveal d4">And two that are not prose</div>
+                <p class="para reveal d5">The pass list (<span class="fig">7,179</span> rows) and the Pulchowk priority applications (<span class="fig">1,700</span> rows) are transcribed to CSV — <em>embedding a table is useless.</em></p>
+                <p class="para reveal d6">Both are excluded from the vector index by directory convention and read only by the exact-lookup modules.</p>
+            </div>
+        </div>
+    </div>
+    <div class="colophon reveal d7"><span><b>Sarathi · Minor Project Defense</b></span><span>5</span></div>
+</section>
+
+<!-- ============ 6 · RAG METHODOLOGY ============ -->
+<section class="slide">
+    <div class="masthead reveal d1"><span class="eyebrow">05 · How retrieval works</span><span class="eyebrow r">Report §4.4.2</span></div>
+    <div class="body tight">
+        <h2 class="reveal d1">Over-fetch, demote, then floor.</h2>
+        <p class="standfirst reveal d2">Three deliberate choices between the question and the six passages that reach the prompt.</p>
+        <ul class="ruled">
+            <li class="reveal d3"><span class="lbl">Over-fetch<br><span class="fig">2k</span> for <span class="fig">k = 6</span></span><p class="txt">Request twice the target so a demoted passage can be genuinely <em>displaced</em> by a better-suited one, not merely reordered among those already chosen.</p></li>
+            <li class="reveal d4"><span class="lbl">Audience demotion<br><span class="fig sym">&lambda; = 0.10</span></span><p class="txt">Foreign-applicant documents are penalised unless the query signals a foreign applicant. Chosen against measurement: competing passages on a quota question separate by ≈<span class="fig">0.03</span>, so <span class="sym">&lambda;</span> reliably reorders — yet stays small enough that a foreign-only document still surfaces when nothing else matches.</p></li>
+            <li class="reveal d5"><span class="lbl">Relevance floor<br><span class="fig sym">&tau; = 0.45</span></span><p class="txt">Set <em>well below</em> the on-topic band. Its job is to exclude passages when a question misses the corpus entirely — not to arbitrate among plausible ones. Measured separation: ≈<span class="fig">0.6</span> on-topic against ≈<span class="fig">0.3</span> off-topic.</p></li>
+        </ul>
+        <p class="para mute reveal d6" style="margin-top:22px">Notice listings are written into the same collection, keyed by URL, so one retrieval covers both the corpus and the live feed.</p>
+    </div>
+    <div class="colophon reveal d7"><span><b>Sarathi · Minor Project Defense</b></span><span>6</span></div>
+</section>
+
+<!-- ============ 7 · ARCHITECTURE ============ -->
+<section class="slide">
+    <div class="masthead reveal d1"><span class="eyebrow">06 · System architecture</span><span class="eyebrow r">Report §3.2, §3.3</span></div>
+    <div class="body">
+        <h2 class="reveal d1">An explicit state graph,<br>not a prompt chain.</h2>
+        <p class="standfirst reveal d2">Every stage is separately addressable, separately testable, and separately fixable — which is what made the defects in §4.7 findable at all.</p>
+        <div class="graph reveal d3">
+            <span class="node plain">Question</span><span class="arrow"></span>
+            <span class="node">normalise<i>strip · translate</i></span><span class="arrow"></span>
+            <span class="node">select<i>retrieval · lookup</i></span><span class="arrow"></span>
+            <span class="node">compute<i>fees · dates · ranks</i></span><span class="arrow"></span>
+            <span class="node">assemble<i>ordered blocks</i></span><span class="arrow"></span>
+            <span class="node">generate<i>grounded</i></span>
+        </div>
+        <div class="nodekey reveal d5">
+            <div><code>scope</code>refuses what the notices do not cover, as a <em>node</em> — not as a sentence in a prompt</div>
+            <div><code>small talk</code>bypasses retrieval entirely, answering under a second</div>
+            <div><code>citations</code>taken from what retrieval returned, before the first token is written</div>
+        </div>
+        <p class="para mute reveal d6" style="margin-top:26px">FastAPI + SSE streaming · Next.js frontend · SQLite for checkpoints and threads · everything containerised.</p>
+    </div>
+    <div class="colophon reveal d7"><span><b>Sarathi · Minor Project Defense</b></span><span>7</span></div>
+</section>
+
+<!-- ============ 8 · COMPUTED, NOT GENERATED ============ -->
+<section class="slide">
+    <div class="masthead reveal d1"><span class="eyebrow">07 · The organising principle</span><span class="eyebrow r">Report §1.4, §6.1</span></div>
+    <div class="body tight">
+        <h2 class="reveal d1">Every quantity a student may act upon<br>is <span class="q">computed</span>, never generated.</h2>
+        <p class="standfirst reveal d2">The consequential questions in this domain are not retrieval problems. They have single correct answers, and nearest-neighbour search does not produce them.</p>
+        <ul class="ruled">
+            <li class="reveal d3"><span class="lbl">Pass list</span><p class="txt"><span class="fig">7,179</span> rows answered by <b>exact lookup</b> — form number, rank, name or district.</p></li>
+            <li class="reveal d4"><span class="lbl">Fees</span><p class="txt">Summed from published line items and <b>checked against the printed totals</b> before they ever reach the model.</p></li>
+            <li class="reveal d5"><span class="lbl">Dates</span><p class="txt">Bikram Sambat converted <em>before</em> the prompt is assembled, so the model never does calendar arithmetic.</p></li>
+            <li class="reveal d6"><span class="lbl">Cut-offs</span><p class="txt">Reconstructed by simulating the published priority applications under the <b>serial-dictatorship rule IOE actually applies.</b></p></li>
+        </ul>
+        <p class="para reveal d7" style="margin-top:18px">The settled result is handed to the model as authoritative context. Its job is the sentence <em>around</em> the figure — never the figure.</p>
+    </div>
+    <div class="colophon reveal d8"><span><b>Sarathi · Minor Project Defense</b></span><span>8</span></div>
+</section>
+
+<!-- ============ 9 · THE FOUR EXTRAS ============ -->
+<section class="slide">
+    <div class="masthead reveal d1"><span class="eyebrow">08 · Beyond conversational retrieval</span><span class="eyebrow r">Report §1.5, §4.4</span></div>
+    <div class="body">
+        <h2 class="reveal d1">What we added on top.</h2>
+        <p class="standfirst reveal d2">The corpus answers the expository questions. These four answer the ones a student acts on — and the third of them exists because our supervisor asked for it.</p>
+        <div class="split" style="gap:70px">
+            <div>
+                <div class="colhead reveal d3">Result lookup</div>
+                <p class="para reveal d3">Did this form pass · who holds this rank · who topped a district. Exact, and it answers <em>"not found"</em> rather than inventing a candidate.</p>
+                <div class="colhead reveal d4" style="margin-top:30px">Fee computation</div>
+                <p class="para reveal d4">All <span class="fig">20</span> published totals reproduce from their line items, across four fee categories.</p>
+            </div>
+            <div>
+                <div class="colhead warn reveal d3">Rank → programme guidance <em>· requested</em></div>
+                <p class="para reveal d4">Our supervisor asked whether the system could indicate <b>which course and campus a rank might reach</b>, from past cut-offs. It can: <span class="fig">16</span> Pulchowk programme–category pairs reconstructed for 2083, extended since with <span class="fig">228</span> published closing ranks across four campuses and four years.</p>
+                <div class="colhead reveal d5" style="margin-top:26px">Notice feed</div>
+                <p class="para reveal d5">Live listings from the official boards, dated in both calendars, degrading per-source on failure.</p>
+            </div>
+        </div>
+    </div>
+    <div class="colophon reveal d6"><span><b>Sarathi · Minor Project Defense</b></span><span>9</span></div>
+</section>
+
+<!-- ============ 10 · LIVE DEMO ============ -->
+<section class="slide">
+    <div class="masthead reveal d1"><span class="eyebrow">09 · Demonstration</span><span class="eyebrow r">localhost:3000</span></div>
     <div class="demo-frame reveal d2">
         <iframe src="http://localhost:3000/ask" title="Sarathi" loading="lazy"></iframe>
     </div>
     <div class="demo-side">
         <div class="colhead reveal d3">Ask, in this order</div>
-        <p class="demo-q reveal d4"><span>1</span>How many computer engineering seats does Pulchowk have?</p>
+        <p class="demo-q reveal d4"><span>1</span>What documents do I need for the women's quota?</p>
         <p class="demo-q reveal d5"><span>2</span>Did form 2083-4001 pass?</p>
         <p class="demo-q reveal d6"><span>3</span>What was the cutoff for Civil at Thapathali?</p>
-        <p class="demo-note reveal d7">Watch the sources appear underneath the answer. They are chosen by retrieval before the first token is written — not produced by the model.</p>
+        <p class="demo-note reveal d7">The first is ordinary retrieval over the notices — the project's core. The second and third are exact lookup and reconstruction. Watch the sources appear beneath each answer.</p>
     </div>
-    <div class="colophon reveal d8"><span><b>Minor Project Defense</b></span><span>4</span></div>
+    <div class="colophon reveal d8"><span><b>Sarathi · Minor Project Defense</b></span><span>10</span></div>
 </section>
 
-<!-- ============ 5 · REPLAY (BACKUP) ============
-     Real captured answers from the running system. Used if the live app,
-     the projector or Ollama misbehaves. -->
+<!-- ============ 11 · REPLAY (BACKUP) ============ -->
 <section class="slide">
-    <div class="masthead reveal d1"><span class="eyebrow">03 · Live — as answered</span><span class="eyebrow r">Sarathi</span></div>
+    <div class="masthead reveal d1"><span class="eyebrow">09 · Demonstration — as answered</span><span class="eyebrow r">Captured from the running system</span></div>
     <div class="body">
-        <p class="standfirst reveal d1" style="margin-bottom:26px">Three questions, three different mechanisms behind them: an exact seat table, an exact record lookup, and four years of published cutoffs.</p>
+        <p class="standfirst reveal d1" style="margin-bottom:26px">Three questions, three different mechanisms: retrieval over the corpus, exact lookup, and reconstruction from published lists.</p>
         <div class="replay">
             <div class="rp reveal d2">
                 <p class="ask">how many computer engineering seats does pulchowk have?</p>
@@ -442,206 +593,133 @@ body.editing [contenteditable="true"]:focus { outline: 2px solid var(--lapis); o
             <div class="rp reveal d6">
                 <p class="ask">what was the cutoff for civil at thapathali?</p>
                 <p class="ans">The first list closed at rank <span class="fig">387</span> in 2082. Earlier years: <span class="fig">278</span>, <span class="fig">273</span>, <span class="fig">310</span>.<span class="caret"></span></p>
-                <div class="src"><b>Sources</b>Thapathali Campus first admission list, 2082 — via the published cutoff record</div>
+                <div class="src"><b>Sources</b>Thapathali Campus first admission list, 2082 — via the published cut-off record</div>
             </div>
         </div>
     </div>
-    <div class="colophon reveal d8"><span><b>Minor Project Defense</b></span><span>5</span></div>
+    <div class="colophon reveal d8"><span><b>Sarathi · Minor Project Defense</b></span><span>11</span></div>
 </section>
 
-<!-- ============ 6 · ARCHITECTURE ============ -->
+<!-- ============ 12 · CHALLENGES I ============ -->
 <section class="slide">
-    <div class="masthead reveal d1"><span class="eyebrow">04 · Architecture</span><span class="eyebrow r">LangGraph</span></div>
-    <div class="body">
-        <h2 class="reveal d1">One turn, eight nodes.</h2>
-        <p class="standfirst reveal d2">Two model calls in the steady state: one to choose the evidence, one to write the answer.</p>
-        <div class="graph reveal d3">
-            <span class="node plain">START</span><span class="arrow"></span>
-            <span class="node">prepare</span><span class="arrow"></span>
-            <span class="node">plan</span><span class="arrow"></span>
-            <span class="node">tools</span><span class="arrow"></span>
-            <span class="node">assemble</span><span class="arrow"></span>
-            <span class="node">answer</span><span class="arrow"></span>
-            <span class="node plain">summarize</span>
-        </div>
-        <div class="branch reveal d4">
-            <span class="node term">small_talk</span>
-            <span class="node term">deflect</span>
-            <span class="branchnote">— the two short paths: a greeting needs no evidence, and a request to write Python is turned away without one.</span>
-        </div>
-        <div class="nodekey reveal d5">
-            <div><code>plan</code>picks tools · <span class="fig">9</span> available</div>
-            <div><code>tools</code>run, results never reach the answering model</div>
-            <div><code>assemble</code>renders <span class="fig">11</span> blocks in a fixed order</div>
-            <div><code>answer</code>a model with <em>no tools bound</em></div>
-        </div>
-    </div>
-    <div class="colophon reveal d6"><span><b>Minor Project Defense</b></span><span>6</span></div>
-</section>
-
-<!-- ============ 7 · THE DESIGN DECISION ============ -->
-<section class="slide">
-    <div class="masthead reveal d1"><span class="eyebrow">05 · The decision everything hangs off</span><span class="eyebrow r">Sarathi</span></div>
-    <div class="body">
-        <h2 class="reveal d1">Tools <span class="q">select</span>. The application <span class="q">places</span>.</h2>
-        <p class="standfirst reveal d2">The model chooses which evidence a question needs. It has no say in where that evidence sits in the prompt.</p>
-        <div class="hair reveal d2"></div>
-        <div class="split">
-            <div>
-                <div class="colhead reveal d3">Why it matters</div>
-                <p class="para reveal d3">With a 7B model, <em>whatever sits nearest the question wins.</em> Tool results arriving as messages would be ordered by call order — which is to say, by the model.</p>
-                <p class="para reveal d4">So the app re-renders every result into its own ordered blocks. The worked fee figures go <b>last</b>, nearest the question.</p>
-            </div>
-            <div>
-                <div class="colhead warn reveal d3">What it cost to learn</div>
-                <p class="para reveal d4">Placed <em>ahead</em> of the retrieved documents, the fee block was ignored: the model went back to the raw fee tables in the retrieved text and multiplied them itself.</p>
-                <p class="para mute reveal d5">The answer was confident, well-formatted, and wrong. Issue 23 in the project log is that failure and its five rounds of layout work.</p>
-            </div>
-        </div>
-    </div>
-    <div class="colophon reveal d6"><span><b>Minor Project Defense</b></span><span>7</span></div>
-</section>
-
-<!-- ============ 8 · THE DETERMINISTIC FLOOR ============ -->
-<section class="slide">
-    <div class="masthead reveal d1"><span class="eyebrow">06 · The deterministic floor</span><span class="eyebrow r">Sarathi</span></div>
-    <div class="body">
-        <h2 class="reveal d1">The model may add tools.<br>It may not take any away.</h2>
-        <p class="standfirst reveal d2">Regexes that predate the rewrite still decide the minimum evidence a question gets. The model's choices are additive on top.</p>
-        <ul class="ruled">
-            <li class="reveal d3"><span class="lbl">ensure_default_calls</span><p class="txt">Guarantees the tool is <em>called</em> — retrieval always, plus the pass list, fees, seats or cutoffs whenever their detectors fire.</p></li>
-            <li class="reveal d4"><span class="lbl">enforce_floor</span><p class="txt">Guarantees the block <em>arrives</em>. Calling a tool turned out not to be the same as getting its answer.</p></li>
-            <li class="reveal d5 warn"><span class="lbl">Why both exist</span><p class="txt">The planner emitted <span class="fig bad">category: "full_fee"</span> against a strict enum. Schema validation failed, the call errored, and <b>nine cases lost their figures</b> while every other tool in the same batch succeeded — <span class="fig bad">49/53 → 44/53</span>.</p></li>
-        </ul>
-        <p class="para mute reveal d6" style="margin-top:26px">Total tool-selection failure now degrades to exactly the previous pipeline, plus a wasted half-second.</p>
-    </div>
-    <div class="colophon reveal d7"><span><b>Minor Project Defense</b></span><span>8</span></div>
-</section>
-
-<!-- ============ 9 · GROUNDED, NOT GENERATED ============ -->
-<section class="slide">
-    <div class="masthead reveal d1"><span class="eyebrow">07 · Grounded, not generated</span><span class="eyebrow r">Sarathi</span></div>
-    <div class="body">
-        <h2 class="reveal d1">The numbers check themselves.</h2>
-        <p class="standfirst reveal d2">Every module that holds figures stores line items only, derives every total, and asserts the result against what the notice printed.</p>
-        <div class="hair reveal d2"></div>
-        <div class="split">
-            <div>
-                <div class="colhead reveal d3">Self-verifying data</div>
-                <p class="para reveal d3"><span class="fig">seats.verify()</span> — 17 derived totals against the booklet's own subtotals and grand total.</p>
-                <p class="para reveal d4"><span class="fig">cutoffs.verify()</span> — all <span class="fig">228</span> rows, two ways. Every programme with a cutoff must have seats at that campus in a table transcribed by a <em>separate route</em>; every Full-fee cutoff must sit deeper than its Regular twin.</p>
-            </div>
-            <div>
-                <div class="colhead reveal d3">And when it cannot answer</div>
-                <p class="para reveal d4">Retrieval hands over its documents before the first token is written, so a citation is a record of what was read — not something the model composed.</p>
-                <p class="para reveal d5">When nothing matches, the app says so. <em>An honest "the published materials do not cover this" is a correct answer;</em> a plausible invented one is the failure this project exists to prevent.</p>
-            </div>
-        </div>
-    </div>
-    <div class="colophon reveal d6"><span><b>Minor Project Defense</b></span><span>9</span></div>
-</section>
-
-<!-- ============ 10 · EVALUATION ============ -->
-<section class="slide">
-    <div class="masthead reveal d1"><span class="eyebrow">08 · Evaluation</span><span class="eyebrow r">src/ioe/eval.py</span></div>
-    <div class="body">
-        <h2 class="reveal d1">It asserts the <span class="q">evidence</span>, not the prose.</h2>
-        <p class="standfirst reveal d2">Whether the sentence reads well is a judgement and needs a judge. Whether the worked fee figures were in front of the model is a fact — and it is the thing that actually breaks.</p>
-        <div class="split" style="gap:96px;margin-top:8px">
-            <div style="flex:1.5;display:flex;gap:64px">
-                <table class="ev">
-                    <colgroup><col class="g"><col class="n"></colgroup>
-                    <tr class="reveal d3"><th>Group</th><th class="n">Pass</th></tr>
-                    <tr class="reveal d3"><td class="g">fees</td><td class="n">15/15</td></tr>
-                    <tr class="reveal d4"><td class="g">results</td><td class="n">7/7</td></tr>
-                    <tr class="reveal d4"><td class="g">cutoffs</td><td class="n">7/7</td></tr>
-                    <tr class="reveal d5 miss"><td class="g">scope</td><td class="n">9/10</td></tr>
-                </table>
-                <table class="ev">
-                    <colgroup><col class="g"><col class="n"></colgroup>
-                    <tr class="reveal d3"><th>Group</th><th class="n">Pass</th></tr>
-                    <tr class="reveal d3"><td class="g">docs</td><td class="n">6/6</td></tr>
-                    <tr class="reveal d4"><td class="g">chances</td><td class="n">6/6</td></tr>
-                    <tr class="reveal d4"><td class="g">language</td><td class="n">3/3</td></tr>
-                    <tr class="reveal d5 miss"><td class="g">issue24</td><td class="n">5/6</td></tr>
-                </table>
-            </div>
-            <div>
-                <p class="evtotal reveal d6">64 / 66<small>across 10 groups, in about three minutes — no golden answers, nothing to grade by hand</small></p>
-            </div>
-        </div>
-        <p class="para mute reveal d7" style="margin-top:30px">It catches the failure this design is most exposed to: the model quietly deciding not to retrieve.</p>
-    </div>
-    <div class="colophon reveal d8"><span><b>Minor Project Defense</b></span><span>10</span></div>
-</section>
-
-<!-- ============ 11 · WHAT MEASUREMENT FOUND ============ -->
-<section class="slide">
-    <div class="masthead reveal d1"><span class="eyebrow">09 · Three things measurement found</span><span class="eyebrow r">Sarathi</span></div>
-    <div class="body">
-        <h2 class="reveal d1">Each one overturned the obvious answer.</h2>
+    <div class="masthead reveal d1"><span class="eyebrow">10 · Challenges and solutions</span><span class="eyebrow r">Report §4.7.1–4.7.2</span></div>
+    <div class="body tight">
+        <h2 class="reveal d1">In every case the symptom<br>was not the cause.</h2>
         <ul class="ruled" style="margin-top:26px">
             <li class="reveal d3">
-                <span class="lbl">The prompt was<br>never read</span>
-                <p class="txt"><span class="fig">num_ctx</span> was unset, so Ollama served <span class="fig">4,096</span> tokens. A real turn assembles <span class="fig">5,318</span>. The overflow is discarded silently, <em>from the front</em> — which is where the system prompt sits. Proved directly: an <span class="fig">8,040</span>-token prompt evaluated <span class="fig">2,050</span> and answered from the filler.</p>
+                <span class="lbl warn">The system prompt<br>was being discarded</span>
+                <p class="txt"><b>Symptom —</b> prompts reported as long and ineffective; rules from twenty-three issues having no effect; invented programmes.<br>
+                <b>Cause —</b> no context window was specified, so the runtime served <span class="fig">4,096</span> tokens against a grounded prompt of <span class="fig">5,318</span>. Overflow is discarded silently and the instruction, being first, goes first. Confirmed directly: an <span class="fig">8,040</span>-token probe evaluated <span class="fig">2,050</span> and answered from the filler.<br>
+                <b>Fix —</b> one constant, <span class="fig">16,384</span>, applied to every model client in the process.</p>
             </li>
-            <li class="reveal d5">
-                <span class="lbl">A regex that could<br>never match</span>
-                <p class="txt">Five Devanagari fee terms sat inside <span class="fig">\b(…)\b</span>. A Devanagari word ends in a combining vowel sign, which Python does not count as a word character — so <span style="font-family:var(--deva)">धरौती</span> was not unreliable, it was <b>unreachable.</b></p>
-            </li>
-            <li class="reveal d7">
-                <span class="lbl">Never an<br>OCR problem</span>
-                <p class="txt"><span class="fig">13 of 15</span> source PDFs have a real text layer. One is annotated in our own corpus as <em>"a scanned PDF with no text layer"</em> — it has <span class="fig">14,827</span> characters of one, in a legacy font that maps Devanagari onto ASCII. It read as rubble, so it was retyped by hand.</p>
+            <li class="reveal d6">
+                <span class="lbl warn">Answers in the<br>wrong language</span>
+                <p class="txt"><b>Symptom —</b> asked for Nepali, replied in a Hindi–Nepali mixture; asked in Nepali, invented syllabus content.<br>
+                <b>Cause —</b> the rule lived in the prompt. Four formulations were tried and each failed differently. <em>Naming the request is what keeps it alive.</em><br>
+                <b>Fix —</b> the request is not named, it is removed — stripped from the question, with the app emitting its own fixed sentence. <span class="fig">0/4 → 24/24.</span></p>
             </li>
         </ul>
     </div>
-    <div class="colophon reveal d8"><span><b>Minor Project Defense</b></span><span>11</span></div>
+    <div class="colophon reveal d8"><span><b>Sarathi · Minor Project Defense</b></span><span>12</span></div>
 </section>
 
-<!-- ============ 12 · LIMITATIONS ============ -->
+<!-- ============ 13 · CHALLENGES II ============ -->
 <section class="slide">
-    <div class="masthead reveal d1"><span class="eyebrow">10 · Limitations</span><span class="eyebrow r">Stated, not discovered</span></div>
+    <div class="masthead reveal d1"><span class="eyebrow">10 · Challenges and solutions</span><span class="eyebrow r">Report §4.7.3–4.7.4</span></div>
     <div class="body">
-        <h2 class="reveal d1">What it does not do.</h2>
+        <ul class="ruled" style="margin-top:6px">
+            <li class="reveal d2">
+                <span class="lbl warn">Out-of-scope answers<br>corrupting the thread</span>
+                <p class="txt"><b>Symptom —</b> reported as two defects: a holiday question answered with a planning questionnaire, and then apparent memory loss.<br>
+                <b>Cause —</b> one defect, not two. Memory was intact. Once the questionnaire is in the transcript, the follow-up <em>"bahamas"</em> is retrieved against as though it were an IOE question and every turn after it is incoherent.<br>
+                <b>Fix —</b> scope became a <b>node of the graph</b>, not a sentence in a prompt. Relevance alone cannot decide it — the distributions overlap.</p>
+            </li>
+            <li class="reveal d5">
+                <span class="lbl warn">Arithmetic performed<br>inside the model</span>
+                <p class="txt"><b>Symptom —</b> asked the eight-semester total it multiplied and trailed off; asked for a total it invented a per-programme tuition table appearing in no document; asked what is refundable it invented a refund policy.<br>
+                <b>Cause —</b> retrieval was correct. The <em>arithmetic</em> was the failure — across three tables, one of which is a part of the total rather than an addition to it.<br>
+                <b>Fix —</b> every total a fee question can ask for is precomputed and verified. The model reads a line; it never adds one.</p>
+            </li>
+        </ul>
+    </div>
+    <div class="colophon reveal d7"><span><b>Sarathi · Minor Project Defense</b></span><span>13</span></div>
+</section>
+
+<!-- ============ 14 · RESULTS ============ -->
+<section class="slide">
+    <div class="masthead reveal d1"><span class="eyebrow">11 · Results</span><span class="eyebrow r">Report §5.1</span></div>
+    <div class="body">
+        <h2 class="reveal d1">Measured against the failure modes<br>it was built to remove.</h2>
+        <div class="split" style="gap:80px;margin-top:26px">
+            <div style="flex:1.25">
+                <table class="ev">
+                    <colgroup><col class="g"><col class="n"></colgroup>
+                    <tr class="reveal d3"><th>What was measured</th><th class="n">Result</th></tr>
+                    <tr class="reveal d3"><td class="g">Scope classification, 39-question probe</td><td class="n">26/39 → 36/39</td></tr>
+                    <tr class="reveal d4"><td class="g">Off-topic questions refused, live</td><td class="n">10/10</td></tr>
+                    <tr class="reveal d4"><td class="g">Genuine questions answered, live</td><td class="n">10/10</td></tr>
+                    <tr class="reveal d5"><td class="g">Bare conversational follow-ups</td><td class="n">8/8</td></tr>
+                    <tr class="reveal d5"><td class="g">English-only enforcement</td><td class="n">0/4 → 24/24</td></tr>
+                    <tr class="reveal d6"><td class="g">Published fee totals reproduced</td><td class="n">20/20</td></tr>
+                    <tr class="reveal d6"><td class="g">Cut-off pairs resolved, 1,647 applicants</td><td class="n">16/16</td></tr>
+                </table>
+            </div>
+            <div>
+                <div class="colhead reveal d7">The finding that matters</div>
+                <p class="para reveal d7"><b>Reliability was obtained from the pipeline, not from the model.</b></p>
+                <p class="para mute reveal d8">No improvement above came from changing the generator. Scope rose through a change of <em>framing</em>; English enforcement improved by <em>deleting</em> an instruction rather than strengthening one; and the single most consequential defect was that the instruction had been silently discarded all along.</p>
+            </div>
+        </div>
+    </div>
+    <div class="colophon reveal d8"><span><b>Sarathi · Minor Project Defense</b></span><span>14</span></div>
+</section>
+
+<!-- ============ 15 · LIMITATIONS ============ -->
+<section class="slide">
+    <div class="masthead reveal d1"><span class="eyebrow">12 · Limitations</span><span class="eyebrow r">Report §1.6, §5.2.2</span></div>
+    <div class="body">
+        <h2 class="reveal d1">Stated plainly.</h2>
         <div class="hair reveal d2"></div>
         <div class="split">
             <div>
-                <div class="colhead warn reveal d3">The weak-evidence gap · 2 of 66</div>
-                <p class="para reveal d3">An off-topic question can still find a plausible-looking document and be answered instead of declined.</p>
-                <p class="para reveal d4">Measured rather than assumed: off-topic questions score <span class="fig bad">0.357–0.576</span> against the corpus, genuine ones <span class="fig">0.562–0.701</span>. <b>The distributions overlap</b> — the worst off-topic outscores two real questions.</p>
-                <p class="para mute reveal d5">No threshold separates them. It needs a different mechanism, and raising the cutoff would start refusing real students.</p>
+                <div class="colhead warn reveal d3">What the results do not establish</div>
+                <p class="para reveal d3"><b>Corpus currency.</b> A snapshot of the 2083 cycle. A notice published after indexing is visible only as a listing — the assistant can say one exists, not what it says.</p>
+                <p class="para reveal d4"><b>Translation dependency.</b> Retrieval runs over English translations. A translation error propagates to every answer from that passage; the Nepali PDF remains authoritative.</p>
+                <p class="para reveal d5"><b>Evaluation scale.</b> Curated probe sets of tens of questions, sized to the failure modes investigated. <em>No figure here is a population-level accuracy estimate.</em></p>
             </div>
             <div>
                 <div class="colhead reveal d3">And the honest rest</div>
-                <p class="para reveal d4">A 7B model on consumer hardware has a quality ceiling — it is why so much is computed in code rather than asked of it.</p>
-                <p class="para reveal d5">Priority allocation is <b>Pulchowk only</b>, one year. Cutoffs are four campuses, open category, first list.</p>
-                <p class="para reveal d6">No user study yet. Every claim here is about the system, not about students using it.</p>
+                <p class="para reveal d4"><b>Model capacity.</b> Seven billion parameters, chosen to fit commodity hardware. Several design decisions exist solely to compensate.</p>
+                <p class="para reveal d5"><b>Coverage of computation.</b> Fees and priority analysis cover Pulchowk, whose schedule alone is published in full. Cut-offs move each year — guidance for ordering preferences, never a prediction.</p>
+                <p class="para reveal d6"><b>No authentication.</b> Conversations are scoped to a browser identifier. This separates histories; it is <em>not</em> a security boundary.</p>
             </div>
         </div>
     </div>
-    <div class="colophon reveal d7"><span><b>Minor Project Defense</b></span><span>12</span></div>
+    <div class="colophon reveal d7"><span><b>Sarathi · Minor Project Defense</b></span><span>15</span></div>
 </section>
 
-<!-- ============ 13 · FUTURE WORK ============ -->
+<!-- ============ 16 · CONCLUSIONS ============ -->
 <section class="slide">
-    <div class="masthead reveal d1"><span class="eyebrow">11 · Next</span><span class="eyebrow r">Sarathi</span></div>
+    <div class="masthead reveal d1"><span class="eyebrow">13 · Conclusions and future work</span><span class="eyebrow r">Report §6</span></div>
     <div class="body">
-        <h2 class="reveal d1">What comes next, and what it costs.</h2>
-        <ul class="ruled" style="margin-top:30px">
-            <li class="reveal d3"><span class="lbl">Second campus</span><p class="txt">The allocation engine is already general — adding Thapathali is <em>a CSV and a code table</em>, no code change.</p></li>
-            <li class="reveal d4"><span class="lbl">The 2 of 66</span><p class="txt">Close the weak-evidence gap with a mechanism rather than a threshold, since the threshold is measured not to exist.</p></li>
-            <li class="reveal d5"><span class="lbl">Continuous intake</span><p class="txt">Run the extraction review queue on a schedule, so a notice published this morning is answerable this afternoon — after a human has read it.</p></li>
-            <li class="reveal d6"><span class="lbl">A user study</span><p class="txt">Real applicants, real questions, during a real admission cycle. The one claim this project cannot yet make.</p></li>
+        <h2 class="reveal d1">Three conclusions.</h2>
+        <ul class="ruled" style="margin-top:22px">
+            <li class="reveal d3"><span class="lbl">The corpus problem<br>is tractable</span><p class="txt">Thirteen notices, translated once with provenance recorded, index to <span class="fig">216</span> passages that answer this domain. Next year's cycle is <b>replacing documents and rebuilding the index</b> — no retraining, no code change.</p></li>
+            <li class="reveal d4"><span class="lbl">The consequential<br>questions are not<br>retrieval problems</span><p class="txt">They have single correct answers. Exact lookup and deterministic computation produce correctness that can be <em>verified</em> — all twenty fee totals, all sixteen cut-off pairs.</p></li>
+            <li class="reveal d5"><span class="lbl">Reliability came from<br>the pipeline</span><p class="txt">Not from the model. Not one improvement reported came from changing the generator.</p></li>
         </ul>
+        <div class="split reveal d6" style="margin-top:30px">
+            <div><div class="colhead">Future work</div><p class="para mute">Extend fee and priority coverage to the remaining campuses · fetch and extract notice bodies, not only listings · a user study across a live admission cycle.</p></div>
+        </div>
     </div>
-    <div class="colophon reveal d7"><span><b>Minor Project Defense</b></span><span>13</span></div>
+    <div class="colophon reveal d7"><span><b>Sarathi · Minor Project Defense</b></span><span>16</span></div>
 </section>
 
-<!-- ============ 14 · Q&A ============ -->
+<!-- ============ 17 · THANK YOU / Q&A ============ -->
 <section class="slide">
-    <div class="masthead reveal d1" style="border-bottom-width:2px">
+    <div class="masthead reveal d1">
         <span class="eyebrow">Questions</span>
-        <span class="eyebrow r">Tribhuvan University · Pulchowk</span>
+        <span class="eyebrow r">Pulchowk Campus, IOE, Tribhuvan University</span>
     </div>
     <div class="t-dateline reveal d2">
         <div class="bs">२०८३<br>भाद्र ११</div>
@@ -653,13 +731,13 @@ body.editing [contenteditable="true"]:focus { outline: 2px solid var(--lapis); o
         <p class="t-lede reveal d4" style="margin-top:26px">Sarathi — <em>सारथी, the one who steers you where you are going.</em></p>
     </div>
     <div class="claims reveal d5">
-        <div><b>Seven sources</b><p>Unified, admission and entrance only.</p></div>
-        <div><b>64 / 66</b><p>Evidence asserted, not prose graded.</p></div>
-        <div><b>Nothing leaves</b><p>No API key. No cloud. One machine.</p></div>
+        <div><b>13 notices · 216 passages</b><p>Every answer attributed to the document it used.</p></div>
+        <div><b>Computed, not generated</b><p>20/20 fee totals · 16/16 cut-off pairs.</p></div>
+        <div><b>Entirely local</b><p>No external model service is contacted.</p></div>
     </div>
     <div class="colophon reveal d6">
-        <span><b>Sabin Shrestha · Sachin</b></span>
-        <span>github.com/masabinhok/sarathi</span>
+        <span><b>Sabin Shrestha · 080BCT069</b> &nbsp;·&nbsp; <b>Sachin K.C. · 080BCT070</b></span>
+        <span>Supervisor: Surendra Shrestha, PhD</span>
     </div>
 </section>
 

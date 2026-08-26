@@ -1,139 +1,173 @@
-# Defense — the questions, and the answers
+# Defense — question sheet
 
-One page to hold. Not slides. Each answer is one or two sentences; the numbers are all real
-and all reproducible from the repo.
-
----
-
-## The one they will actually ask
-
-**"Did you just wire up an LLM?"**
-
-No, and the deck is arranged to answer this before it is asked. The model chooses which
-evidence a question needs; the *application* decides what reaches the prompt and in what
-order, and there is a deterministic floor underneath so total tool-selection failure
-degrades to the previous pipeline rather than to nothing. Most of the figures a student
-acts on are computed in Python and asserted against the published notice — the model
-writes the sentence around them.
+One page to hold. Every figure below is from the submitted report, with its section, so an
+examiner can follow you into it.
 
 ---
 
-## Method and correctness
+## The three they are most likely to open with
 
-**"How do you know the answers are correct?"**
-Two independent layers. The data checks itself — every total is derived from line items
-and asserted against what the notice printed, and all 228 cutoff rows are cross-checked
-against a seat table transcribed by a completely separate route. And the 66-case suite
-asserts *which evidence reached the model*, which is a fact rather than a judgement.
+**"Why not just use ChatGPT?"** — §1.4
+It has no access to these notices, and the year-specific facts an applicant needs are
+exactly what a language model is least able to recall — so it answers confidently and
+wrongly. Sarathi answers only from the indexed notices, names the document, and declines
+what they do not cover. It also removes recurring cost, removes a network dependency a
+Nepali deployment cannot assume, and keeps queries naming real candidates on the machine.
 
-**"Why not test the answers themselves?"**
-Because that needs a judge, and a judge needs golden answers that go stale every admission
-cycle. Whether the worked fee figures were in front of the model is checkable in
-milliseconds and is the thing that actually breaks. We do read answers by hand too — the
-Nepali translation bug was found that way, not by the suite.
+**"Why retrieval-augmented rather than fine-tuned?"** — §1.4
+The corpus is small, closed, authoritative and revised annually — the exact conditions
+where RAG beats fine-tuning. The knowledge is external, so next year's cycle is thirteen
+replaced documents and a rebuilt index, with no retraining and no code change. And every
+answer stays traceable to a notice the student can open.
 
-**"What are the two failures?"**
-The same weak-evidence gap both times: an off-topic question finds a plausible-looking
-document and gets answered instead of declined. Measured — off-topic questions score
-0.357–0.576 against the corpus, genuine ones 0.562–0.701. The distributions overlap and
-the worst off-topic beats two real questions, so no threshold separates them. Raising it
-would start refusing real students.
-
-**"Why RAG rather than fine-tuning?"**
-The corpus changes every cycle, so fine-tuning means retraining every year — and it still
-could not cite a source. Retrieval also fails *visibly*: you can see that nothing matched.
-A fine-tuned model fails silently and fluently.
+**"What is the contribution — isn't this just a wrapper?"** — §6.1
+The contribution is the principle that organises it: *every quantity a student may act
+upon is computed, never generated.* Pass-list membership, fee totals, BS dates and
+programme cut-offs are settled in code and handed to the model as authoritative context.
+The model writes the sentence around the figure; it never produces the figure.
 
 ---
 
-## Design
+## Corpus and ingestion — §3.6, §4.4.1
 
-**"What is actually novel here?"**
-Not the retrieval. It is that tool results never reach the answering model directly — the
-app re-renders them into blocks in a fixed order it controls. With a 7B model whatever
-sits nearest the question wins, and letting tool-call order decide placement means letting
-the model decide it. Placed ahead of the retrieved documents, the worked fee block was
-ignored and the model went back to the raw tables and multiplied them itself.
+**"How large is the corpus?"**
+Fifteen source PDFs acquired; thirteen translated notices indexed — 171,402 characters
+into **216 chunks**, mean 781 characters, median 828, largest 1,199. Two tabular documents
+(the 7,179-row pass list, the 1,700-row priority applications) are transcribed to CSV and
+deliberately excluded from the vector index — embedding a table is useless.
 
-**"Why a local model? Wouldn't a bigger one be better?"**
-Better, yes; available, no — and the constraint is what produced the architecture.
-`qwen2.5:7b` scored 7/8 on a tool-calling probe and `gemma3` advertises no tool capability
-at all, so everything the model cannot be trusted with is done in code. Also: no
-per-student cost, works without internet, and no candidate's result ever leaves the
-building.
+**"Why translate at all? bge-m3 is multilingual."**
+Retrieval does not need it — the embedding model matches English queries against Nepali
+text perfectly well. The *generator* needs it: qwen2.5:7b answers in English and degrades
+when it has to translate context while reasoning over it.
 
-**"Why LangGraph and not a plain loop?"**
-We deliberately did not use the prebuilt agent. `bind_tools(tool_choice=...)` is a no-op on
-Ollama, so a tool call cannot be forced — "retrieval always runs" is inexpressible inside
-that loop. The graph is hand-built for exactly that reason.
+**"How do you know the translations are right?"**
+We do not claim they are beyond error, and §1.6 lists it as a limitation: a translation
+error propagates to every answer from that passage, and the original Nepali PDF remains
+authoritative. What we did control: semantic translation with Nepali terms retained in
+parentheses, Devanagari numerals converted, **BS dates left unconverted** so the conversion
+machinery resolves them rather than the translator, and each document records its own
+translation type so reproduced text is distinguishable from translated text.
 
----
-
-## Data
-
-**"Your cutoff data comes from a third-party site."**
-It does. That site states each figure is recalculated from the campus-published admission
-lists, and links them — those primary lists are what our citations point at. 214 of 228
-rows carry one; the remaining 14 are left empty rather than given a wrong citation.
-
-**"What happens when a source website changes?"**
-Each of the seven has its own small parser and its own error entry, so one site breaking
-degrades that source and leaves the rest intact. Two of the seven were unreachable until
-their admission portals exposed feeds — the code comment saying so is now deleted.
-
-**"How do you keep the corpus current?"**
-Notices are re-scraped in the background. Extracting their text is automatic; *publishing*
-it is not — extraction stops at a review queue and a person approves before anything is
-indexed. A wrong figure in the corpus is a student paying the wrong amount.
-
-**"Isn't scraping fragile / is it allowed?"**
-`robots.txt` permits it, we fetch listings only, and the cache is read at request time so
-the app never depends on a third-party site being up mid-conversation.
+**"Why 1,200 characters and 150 overlap?"**
+Splitting is two-stage: first on the document's own h1/h2/h3 headings, so a chunk carries
+its own context, then a recursive character split only for sections still oversized. The
+size bound is what keeps a chunk inside the retrieval budget; the overlap keeps a sentence
+spanning a boundary retrievable from either side.
 
 ---
 
-## Scope and safety
+## Retrieval — §4.4.2
 
-**"How do you stop it giving wrong admission advice?"**
-Chances are stated as a count of years — "cleared in 2 of the 4 recorded years" — never as
-a percentage, never "safe", and always with the statement that nobody can guarantee a
-place. The system prompt forbids producing a cutoff from anywhere but a cutoff block, and
-forbids comparing a rank against a seat count.
+**"Walk me through retrieval."**
+Over-fetch 2k candidates for a target of k = 6, so a demoted passage can genuinely be
+displaced rather than merely reordered. Then a domain rerank: foreign-applicant documents
+are demoted by λ = 0.10 unless the query signals a foreign applicant. Then a relevance
+floor τ = 0.45, keeping the best six above it.
 
-**"What if it doesn't know?"**
-It says so. That is a designed path, not a fallback — when no source matches, the app
-tells the model the evidence is empty rather than letting it improvise.
+**"Why λ = 0.10?"**
+Measured, not chosen. Competing passages on a quota question separate by about 0.03, so
+0.10 reliably reorders — while staying small enough that a foreign-only document still
+surfaces when nothing else matches.
 
-**"Could this be extended to other institutions?"**
-The retrieval, notice, extraction and evaluation layers are institution-agnostic. Fees,
-seats, cutoffs and priority encode IOE's published rules and would be rewritten per
-institution. That split is deliberate.
+**"Why is the floor so low at 0.45?"**
+Because its job is to exclude passages when a question misses the corpus entirely, not to
+arbitrate among plausible ones. Measured separation on this corpus is wide: about 0.6
+on-topic against 0.3 off-topic.
+
+**"Then why doesn't the floor decide scope?"** — §4.7.3
+Because the distributions overlap. In-scope questions scored 0.435–0.700 and off-scope
+0.357–0.573, and *"how do I apply to Kathmandu University"* at 0.573 outranks *"how many
+seats are there in Pulchowk"* at 0.478. Relevance alone cannot adjudicate scope, which is
+why the guard uses three signals and why scope is a node in the graph rather than a
+sentence in a prompt.
 
 ---
 
-## If pushed
+## Results — §5.1
 
-**"Why should we believe the measurements?"**
-Every one is reproducible from the repo: `uv run python -m ioe.eval`, and each module's
-`verify()` runs from its own `__main__`. The project log records the failures as well as
-the fixes — including three occasions where a claim we had written down turned out to be
-contradicted by the data and was corrected.
+| | |
+| --- | --- |
+| Scope classification, 39-question probe | 26/39 → **36/39** |
+| Off-topic refused / genuine answered, live | 10/10 · 10/10 |
+| Bare conversational follow-ups | 8/8 |
+| English-only enforcement | 0/4 → **24/24** |
+| Published fee totals reproduced | **20/20** |
+| Cut-off pairs resolved, 1,647 applicants | **16/16** |
 
-**Numbers to have ready, but do not volunteer:**
-6,660 lines of Python · 2,652 of TypeScript · 217 indexed chunks · 7,179-row pass list ·
-228 cutoff figures · 1,701 priority applications · 9 tools · 11 ordered blocks ·
-56 commits · 32 tracked issues, 28 closed.
+**"Which result are you proudest of?"**
+That **reliability came from the pipeline, not the model.** Not one improvement above came
+from changing the generator. Scope rose ten points through a change of *framing*; English
+enforcement went from 0/4 to 24/24 by *deleting* an instruction rather than strengthening
+one; and the single most consequential defect was that the instruction had been silently
+discarded all along.
+
+**"Explain the classifier framing result."** — §5.1.3
+The same model on the same probe set differed by ten points between framings. "IN or OUT of
+scope" scored 26/39 and its error profile was inverted against our cost structure — it
+refused 13 of 22 genuine questions. "Could this plausibly be about IOE? When in doubt, say
+YES" scored 36/39. A student turned away with a genuine question has no recourse; an
+off-topic answer costs a few seconds.
+
+**"Explain the cut-off reconstruction."** — §5.1.7, §2.1.7
+IOE admits by walking the merit list from rank 1 and placing each applicant into the best
+still-open programme on their own list. That is a serial dictatorship, so given the
+published priority applications the outcome is *determined* — we recompute it rather than
+estimate it. 1,700 published rows reduce to 1,647 distinct applicants after quota
+deduplication; all 624 Pulchowk seats fill, so all sixteen programme–category pairs yield a
+cut-off. Computer Regular closed at rank 55, less than half the next programme.
+
+**"Why is Regular always sharper than Full-fee?"**
+Empirically true for every programme, and it confirms the ordering advice the system gives:
+a Regular seat placed above its Full-fee counterpart costs a candidate nothing, because a
+candidate who does not reach Regular still falls through to Full-fee at the same rank.
+
+---
+
+## Challenges — §4.7
+
+**"What was the hardest bug?"**
+The system instruction was being discarded. No context window was specified, so the runtime
+served 4,096 tokens against a grounded prompt of 5,318 — 2,131 of it the instruction
+itself. Overflow is dropped silently and the instruction, being first, goes first.
+Confirmed directly rather than inferred: an 8,040-token probe evaluated 2,050 tokens and
+answered from the filler; the same prompt at 8,192 evaluated 8,037 and answered correctly.
+
+**"Why 16,384 and not 8,192?"**
+8,192 costs less VRAM — 4.99 GB against 5.47 GB of 8.19 GB — but leaves too little slack
+against the worst-case prompt, and silent truncation is the failure being fixed. The
+constant is applied to *every* model client in the process, because the window is a
+load-time option: two clients disagreeing makes the runtime hold two model instances, and
+two do not fit on an eight-gigabyte card.
+
+**"Why strip the language request instead of instructing the model?"**
+Four prompt formulations were tried and each failed differently. The pattern common to all
+four is that naming the request in the prompt is what keeps it alive. So the request is not
+named — it is removed from the question, and the application emits its own fixed sentence.
+
+---
+
+## Limitations — §1.6, §5.2.2
+
+Corpus currency (a snapshot; newer notices are visible as listings only) · translation
+dependency · model capacity at seven billion parameters · computation covers Pulchowk,
+whose fee schedule alone is published in full · no authentication, the browser identifier
+is not a security boundary · latency in seconds, not milliseconds · **evaluation scale —
+curated probe sets of tens of questions; no figure is a population-level accuracy
+estimate, and no user study was conducted.**
+
+Say these before you are asked. They are in the report; owning them reads as rigour.
 
 ---
 
 ## Demo runbook
 
-Before you start: `docker compose up -d --build`, then open the deck and check slide 4
-loads the app. Ollama must be running.
+Before starting: `docker compose up -d --build`, Ollama running, then open the deck and
+check slide 10 loads the app.
 
-1. How many computer engineering seats does Pulchowk have? → **36 Regular / 60 Full Fee**
-2. Did form 2083-4001 pass? → **yes, rank 1, Manan Shrestha, Morang**
-3. What was the cutoff for Civil at Thapathali? → **387, 2082 first list**
+1. What documents do I need for the women's quota? → ordinary retrieval, the project's core
+2. Did form 2083-4001 pass? → exact lookup: rank 1, Manan Shrestha, Morang
+3. What was the cutoff for Civil at Thapathali? → 387, 2082 first list
 
-If anything fails, press **→ once**. Slide 5 replays all three with their citations and you
-can keep talking. Do not improvise a fourth question live.
+If anything fails, **press → once**. Slide 11 replays all three with citations and you keep
+talking. Do not improvise a fourth question live.

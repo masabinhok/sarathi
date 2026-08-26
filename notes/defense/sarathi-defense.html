@@ -1,0 +1,812 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sarathi — Minor Project Defense</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200;0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300;1,6..72,400&family=IBM+Plex+Sans+Devanagari:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ===========================================
+   FIXED 16:9 STAGE: MANDATORY BASE STYLES
+   Slides are authored at 1920×1080 and scaled as a whole.
+   =========================================== */
+html,
+body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: var(--stage-bg, #000);
+}
+.deck-viewport {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    background: var(--stage-bg, #000);
+}
+.deck-stage {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    transform-origin: 0 0;
+    background: var(--slide-bg, #fff);
+}
+.slide {
+    position: absolute;
+    inset: 0;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    display: block;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    background: var(--slide-bg, #fff);
+}
+.slide.active,
+.slide.visible {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+    z-index: 1;
+}
+img, video, canvas, svg { max-width: 100%; max-height: 100%; }
+.deck-controls {
+    position: fixed;
+    left: 50%;
+    bottom: 22px;
+    transform: translateX(-50%);
+    z-index: 1000;
+}
+@media print {
+    html, body { width: 1920px; height: auto; overflow: visible; background: #fff; }
+    .deck-viewport { position: static; overflow: visible; background: #fff; }
+    .deck-stage { position: static; width: auto; height: auto; transform: none !important; background: none; }
+    .slide {
+        position: relative; display: block !important; visibility: visible !important;
+        opacity: 1 !important; pointer-events: auto !important;
+        width: 1920px; height: 1080px; break-after: page; page-break-after: always;
+    }
+    .slide:last-child { break-after: auto; page-break-after: auto; }
+    .deck-controls { display: none !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.2s !important;
+    }
+}
+
+/* ===========================================
+   DESIGN SYSTEM — "MASTHEAD"
+   The product's own tokens, carried onto the stage. Three pigments and a
+   rule about each: ink is what the notices say, lapis is the app's own hand
+   (anything computed, any label, any active state), crimson is consequence
+   only and is never allowed to decorate.
+   =========================================== */
+:root {
+    --paper:#fcfcfc; --paper-2:#f6f4f0;
+    --ink:#171717; --mute:#6b6660; --faint:#9a948c;
+    --rule:#e7e1d8; --rule-strong:#d6cec1;
+    --lapis:#1f3a93; --lapis-soft:#eef0fa; --crimson:#9b1c2e; --crimson-soft:#f7edee;
+    --stage-bg:#100f0e; --slide-bg:var(--paper);
+    --serif:'Newsreader',Georgia,serif;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --deva:'IBM Plex Sans Devanagari','Newsreader',serif;
+}
+.deck-stage, .slide { background: var(--paper); }
+/* NB: do NOT set position on .slide here. The base rule is position:absolute;inset:0,
+   which is what stacks all fourteen slides on top of each other. Overriding it with
+   position:relative laid them out vertically instead -- every slide after the first
+   rendered as blank paper, because it was sitting hundreds of pixels below the stage.
+   position:absolute already establishes the containing block the children need. */
+
+/* === SLIDE CHROME ===
+   Every content slide carries the same masthead rule and the same footer.
+   The masthead is the only 2px line in the system; everything else is a
+   hairline, exactly as in the product. */
+.masthead {
+    position: absolute; left: 120px; right: 120px; top: 76px;
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding-bottom: 14px; border-bottom: 2px solid var(--lapis);
+}
+.eyebrow {
+    font-family: var(--mono); font-size: 18px; letter-spacing: .19em;
+    text-transform: uppercase; color: var(--lapis);
+}
+.eyebrow.r { color: var(--faint); letter-spacing: .11em; }
+
+.colophon {
+    position: absolute; left: 120px; right: 120px; bottom: 62px;
+    display: flex; justify-content: space-between; align-items: baseline;
+    border-top: 1px solid var(--rule); padding-top: 14px;
+    font-family: var(--mono); font-size: 17px; color: var(--faint);
+}
+.colophon b { color: var(--mute); font-weight: 400; }
+
+/* === SLIDE BODY === */
+.body { position: absolute; left: 120px; right: 120px; top: 178px; bottom: 150px; }
+h2 {
+    font-family: var(--serif); font-weight: 300; font-size: 84px; line-height: 1.02;
+    letter-spacing: -.024em; color: var(--ink); margin: 0 0 10px;
+}
+h2 .q { color: var(--lapis); }
+.standfirst {
+    font-family: var(--serif); font-weight: 300; font-style: italic;
+    font-size: 34px; line-height: 1.38; color: var(--mute);
+    max-width: 1320px; margin: 0 0 40px;
+}
+.hair { height: 1px; background: var(--rule); margin: 30px 0; }
+
+/* Hairline-ruled list — the app's own list vocabulary, no cards, no bullets. */
+ul.ruled { list-style: none; margin: 0; padding: 0; }
+ul.ruled li {
+    border-top: 1px solid var(--rule); padding: 24px 0 24px 0;
+    display: flex; gap: 34px; align-items: baseline;
+}
+ul.ruled li:last-child { border-bottom: 1px solid var(--rule); }
+ul.ruled .lbl {
+    font-family: var(--mono); font-size: 16px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--lapis);
+    flex: 0 0 250px; padding-top: 8px;
+}
+ul.ruled .txt {
+    font-family: var(--serif); font-weight: 300; font-size: 36px;
+    line-height: 1.36; color: var(--ink); margin: 0;
+}
+ul.ruled .txt em { font-style: italic; color: var(--mute); }
+ul.ruled .txt b { font-weight: 500; }
+ul.ruled li.warn .lbl { color: var(--crimson); }
+
+/* Figures: lapis because they are computed, mono because they are exact. */
+.fig { font-family: var(--mono); font-weight: 500; color: var(--lapis); font-variant-numeric: tabular-nums; }
+.fig.bad { color: var(--crimson); }
+
+/* Two-column split used by several slides. */
+.split { display: flex; gap: 78px; }
+.split > * { flex: 1; min-width: 0; }
+.colhead {
+    font-family: var(--mono); font-size: 16px; letter-spacing: .15em;
+    text-transform: uppercase; color: var(--lapis);
+    border-bottom: 1px solid var(--rule-strong); padding-bottom: 11px; margin-bottom: 22px;
+}
+.colhead.warn { color: var(--crimson); }
+p.para {
+    font-family: var(--serif); font-weight: 300; font-size: 34px;
+    line-height: 1.44; color: var(--ink); margin: 0 0 22px;
+}
+p.para.mute { color: var(--mute); }
+
+/* === TITLE SLIDE === */
+.t-dateline {
+    position: absolute; left: 120px; top: 214px; width: 186px;
+    border-top: 1px solid var(--rule-strong); padding-top: 14px; font-family: var(--mono);
+}
+.t-dateline .bs { font-size: 33px; color: var(--lapis); line-height: 1.16; font-weight: 500; }
+.t-dateline .ad { font-size: 19px; color: var(--faint); margin-top: 5px; }
+.t-body { position: absolute; left: 352px; right: 120px; top: 198px; }
+h1 {
+    font-family: var(--serif); font-weight: 200; font-size: 250px; line-height: .84;
+    letter-spacing: -.045em; color: var(--ink); margin: 0;
+}
+.t-deva { font-family: var(--deva); font-weight: 400; font-size: 78px; color: var(--lapis); margin: 18px 0 0; line-height: 1; }
+.t-lede {
+    font-family: var(--serif); font-weight: 300; font-size: 39px; line-height: 1.42;
+    color: var(--ink); max-width: 1130px; margin: 30px 0 0;
+}
+.t-lede em { font-style: italic; color: var(--mute); }
+.claims { position: absolute; left: 352px; right: 120px; bottom: 168px; display: flex; border-top: 1px solid var(--rule); }
+.claims div { flex: 1; padding: 20px 32px 0 0; border-right: 1px solid var(--rule); }
+.claims div:last-child { border-right: 0; padding-right: 0; }
+.claims b {
+    display: block; font-family: var(--mono); font-size: 15px; letter-spacing: .15em;
+    text-transform: uppercase; color: var(--lapis); margin-bottom: 10px;
+}
+.claims .warn b { color: var(--crimson); }
+.claims p { font-family: var(--serif); font-size: 26px; line-height: 1.38; color: var(--mute); margin: 0; font-weight: 300; }
+
+/* === GRAPH DIAGRAM (slide 6) === */
+.graph { display: flex; align-items: center; gap: 0; margin: 8px 0 0; }
+.node {
+    font-family: var(--mono); font-size: 20px; font-weight: 500; color: var(--lapis);
+    border: 1px solid var(--lapis); padding: 15px 19px; white-space: nowrap; background: var(--lapis-soft);
+}
+.node.plain { color: var(--mute); border-color: var(--rule-strong); background: transparent; }
+.node.term { color: var(--faint); border-style: dashed; background: transparent; }
+.arrow { flex: 1; height: 1px; background: var(--rule-strong); position: relative; min-width: 26px; }
+.arrow::after {
+    content: ""; position: absolute; right: 0; top: -3.5px;
+    border-left: 7px solid var(--rule-strong); border-top: 4px solid transparent; border-bottom: 4px solid transparent;
+}
+.branch { display: flex; gap: 20px; margin-top: 26px; padding-left: 122px; }
+.branch .node { font-size: 18px; padding: 11px 15px; }
+.branchnote { font-family: var(--serif); font-style: italic; font-size: 26px; color: var(--faint); align-self: center; }
+.nodekey { display: flex; gap: 54px; margin-top: 34px; border-top: 1px solid var(--rule); padding-top: 20px; }
+.nodekey div { font-family: var(--serif); font-size: 28px; color: var(--mute); font-weight: 300; }
+.nodekey code { font-family: var(--mono); font-size: 19px; color: var(--lapis); display: block; margin-bottom: 5px; }
+
+/* === EVALUATION TABLE (slide 10) === */
+table.ev { width: 100%; border-collapse: collapse; font-family: var(--mono); table-layout: fixed; }
+table.ev col.g { width: 62%; }
+table.ev col.n { width: 38%; }
+table.ev th {
+    font-size: 15px; letter-spacing: .15em; text-transform: uppercase; color: var(--lapis);
+    text-align: left; padding: 0 0 12px; border-bottom: 1px solid var(--rule-strong); font-weight: 500;
+}
+table.ev th.n, table.ev td.n { text-align: right; }
+table.ev td {
+    font-size: 31px; color: var(--ink); padding: 17px 0; border-bottom: 1px solid var(--rule);
+    font-variant-numeric: tabular-nums;
+}
+table.ev td.g { font-family: var(--serif); font-size: 34px; font-weight: 300; }
+table.ev tr.miss td { color: var(--crimson); }
+.evtotal {
+    font-family: var(--mono); font-size: 96px; font-weight: 500; color: var(--lapis);
+    font-variant-numeric: tabular-nums; line-height: 1; margin: 0;
+}
+.evtotal small { font-family: var(--serif); font-size: 30px; font-weight: 300; color: var(--mute); display: block; margin-top: 14px; font-style: italic; }
+
+/* === LIVE DEMO (slide 4) === */
+.demo-frame {
+    position: absolute; left: 120px; top: 178px; width: 1240px; height: 762px;
+    border: 1px solid var(--rule-strong); background: var(--paper-2); overflow: hidden;
+}
+.demo-frame iframe { width: 1240px; height: 762px; border: 0; display: block; }
+.demo-side { position: absolute; left: 1400px; right: 120px; top: 178px; }
+.demo-side .colhead { margin-bottom: 20px; }
+.demo-q {
+    font-family: var(--serif); font-weight: 300; font-size: 32px; line-height: 1.34;
+    color: var(--ink); border-top: 1px solid var(--rule); padding: 19px 0 19px 0; margin: 0;
+    display: flex; gap: 16px;
+}
+.demo-q:last-of-type { border-bottom: 1px solid var(--rule); }
+.demo-q span { font-family: var(--mono); font-size: 17px; color: var(--lapis); flex: 0 0 26px; padding-top: 6px; }
+.demo-note {
+    font-family: var(--serif); font-style: italic; font-size: 25px; color: var(--faint);
+    line-height: 1.4; margin: 30px 0 0;
+}
+
+/* === REPLAY (slide 5) === */
+.replay { display: flex; gap: 40px; margin-top: 4px; }
+.rp {
+    flex: 1; min-width: 0; border-top: 1px solid var(--rule-strong); padding-top: 20px;
+    display: flex; flex-direction: column;
+}
+.rp .ask {
+    font-family: var(--mono); font-size: 19px; color: var(--lapis); line-height: 1.4;
+    margin: 0 0 18px; display: flex; gap: 10px;
+}
+.rp .ask::before { content: "▸"; color: var(--lapis); }
+.rp .ans {
+    font-family: var(--serif); font-weight: 300; font-size: 30px; line-height: 1.44;
+    color: var(--ink); margin: 0; flex: 1;
+}
+.rp .ans b { font-weight: 500; color: var(--ink); }
+.rp .ans .fig { font-size: 29px; }
+.rp .src {
+    font-family: var(--mono); font-size: 15px; color: var(--faint); line-height: 1.5;
+    border-top: 1px solid var(--rule); padding-top: 14px; margin-top: 20px;
+}
+.rp .src b { display: block; color: var(--lapis); letter-spacing: .14em; text-transform: uppercase; font-size: 13px; margin-bottom: 8px; font-weight: 500; }
+/* the caret only shows while the slide is animating in */
+.caret { display: inline-block; width: 11px; height: 27px; background: var(--lapis); vertical-align: -4px; margin-left: 3px; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+
+/* === REVEAL ANIMATION ===
+   One orchestrated entrance per slide, staggered. Nothing moves after that. */
+.slide.active .reveal { animation: rise .78s cubic-bezier(.2,.72,.2,1) both; }
+.reveal { opacity: 0; }
+@keyframes rise { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
+.slide.active .d1 { animation-delay: .05s; }
+.slide.active .d2 { animation-delay: .16s; }
+.slide.active .d3 { animation-delay: .28s; }
+.slide.active .d4 { animation-delay: .40s; }
+.slide.active .d5 { animation-delay: .52s; }
+.slide.active .d6 { animation-delay: .64s; }
+.slide.active .d7 { animation-delay: .76s; }
+.slide.active .d8 { animation-delay: .88s; }
+
+/* === DECK CHROME (outside the stage) === */
+.deck-controls {
+    font-family: var(--mono); font-size: 12px; letter-spacing: .16em;
+    color: rgba(252,252,252,.42); display: flex; gap: 18px; align-items: center;
+    background: rgba(0,0,0,.34); padding: 7px 15px; border-radius: 2px;
+    opacity: 0; transition: opacity .3s;
+}
+.deck-viewport:hover .deck-controls { opacity: 1; }
+.deck-controls button {
+    background: none; border: 0; color: inherit; font: inherit; cursor: pointer; padding: 0 4px;
+}
+#editBadge {
+    position: fixed; top: 14px; left: 14px; z-index: 1001; font-family: var(--mono); font-size: 11px;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--paper);
+    background: var(--crimson); padding: 6px 11px; display: none;
+}
+body.editing #editBadge { display: block; }
+body.editing [contenteditable="true"]:hover { outline: 1px dashed var(--lapis); outline-offset: 3px; }
+body.editing [contenteditable="true"]:focus { outline: 2px solid var(--lapis); outline-offset: 3px; }
+</style>
+</head>
+<body>
+<div id="editBadge">Editing · Ctrl+S to save · E to exit</div>
+<div class="deck-viewport">
+<main class="deck-stage" id="deckStage">
+
+<!-- ============ 1 · TITLE ============ -->
+<section class="slide title-slide active">
+    <div class="masthead reveal d1" style="border-bottom-width:2px">
+        <span class="eyebrow">Institute of Engineering · Minor Project Defense</span>
+        <span class="eyebrow r">Tribhuvan University · Pulchowk</span>
+    </div>
+    <div class="t-dateline reveal d2">
+        <div class="bs">२०८३<br>भाद्र ११</div>
+        <div class="ad">2026-08-27</div>
+    </div>
+    <div class="t-body">
+        <h1 class="reveal d2">Sarathi</h1>
+        <p class="t-deva reveal d3">सारथी</p>
+        <p class="t-lede reveal d4">A retrieval-backed assistant for the IOE entrance and admission process — <em>every figure traced to a published notice, and nothing leaving the machine it runs on.</em></p>
+    </div>
+    <div class="claims reveal d5">
+        <div><b>Seven sources</b><p>Every constituent campus and both IOE boards, unified.</p></div>
+        <div><b>64 / 66</b><p>An evaluation suite that asserts evidence, not prose.</p></div>
+        <div class="warn"><b>Never guesses</b><p>When the documents are silent, it says so.</p></div>
+    </div>
+    <div class="colophon reveal d6">
+        <span><b>Sabin Shrestha · Sachin</b></span>
+        <span>qwen2.5:7b + bge-m3 · one 8 GB GPU · no API keys</span>
+    </div>
+</section>
+
+<!-- ============ 2 · THE PROBLEM ============ -->
+<section class="slide">
+    <div class="masthead reveal d1"><span class="eyebrow">01 · The problem</span><span class="eyebrow r">Sarathi</span></div>
+    <div class="body">
+        <h2 class="reveal d1">Everything a student needs is published.<br>None of it is in one place.</h2>
+        <p class="standfirst reveal d2">A candidate who has just passed the entrance exam has days to act, and the information is spread across sites that do not know about each other.</p>
+        <ul class="ruled">
+            <li class="reveal d3"><span class="lbl">Seven sites</span><p class="txt">Two IOE boards and five campuses, each publishing its own notices on its own schedule.</p></li>
+            <li class="reveal d4"><span class="lbl">Two scripts</span><p class="txt">Notices arrive in Nepali and English — <em>often in the same document.</em></p></li>
+            <li class="reveal d5"><span class="lbl">Two calendars</span><p class="txt">Deadlines printed in Bikram Sambat; the student's phone shows Gregorian.</p></li>
+            <li class="reveal d6 warn"><span class="lbl">One wrong move</span><p class="txt">Decline a lower priority you were offered, and you are <b>out of the admission process entirely.</b></p></li>
+        </ul>
+    </div>
+    <div class="colophon reveal d7"><span><b>Minor Project Defense</b></span><span>2</span></div>
+</section>
+
+<!-- ============ 3 · WHAT IT IS ============ -->
+<section class="slide">
+    <div class="masthead reveal d1"><span class="eyebrow">02 · What Sarathi is</span><span class="eyebrow r">Sarathi</span></div>
+    <div class="body">
+        <h2 class="reveal d1">A question answered from the notices,<br>with the notice attached.</h2>
+        <div class="hair reveal d2"></div>
+        <div class="split">
+            <div>
+                <div class="colhead reveal d3">It answers</div>
+                <p class="para reveal d3"><b>Fees</b> — worked totals, not a table to read.</p>
+                <p class="para reveal d4"><b>Seats</b> — every campus, every programme.</p>
+                <p class="para reveal d4"><b>Your result</b> — by form number, rank, name or district.</p>
+                <p class="para reveal d5"><b>Your chances</b> — against four published years of cutoffs.</p>
+            </div>
+            <div>
+                <div class="colhead reveal d3">It runs</div>
+                <p class="para reveal d3">Entirely on one machine. <span class="fig">qwen2.5:7b</span> generates, <span class="fig">bge-m3</span> embeds, both through Ollama on a single <span class="fig">8 GB</span> GPU.</p>
+                <p class="para mute reveal d5">No API key, no cloud inference, no per-student cost — and no question about a candidate's result ever leaves the building.</p>
+            </div>
+        </div>
+    </div>
+    <div class="colophon reveal d6"><span><b>Minor Project Defense</b></span><span>3</span></div>
+</section>
+
+<!-- ============ 4 · LIVE DEMO ============
+     The body is a live iframe of the running app. If it fails, press → once:
+     the next slide replays the same three answers. -->
+<section class="slide">
+    <div class="masthead reveal d1"><span class="eyebrow">03 · Live</span><span class="eyebrow r">localhost:3000</span></div>
+    <div class="demo-frame reveal d2">
+        <iframe src="http://localhost:3000/ask" title="Sarathi" loading="lazy"></iframe>
+    </div>
+    <div class="demo-side">
+        <div class="colhead reveal d3">Ask, in this order</div>
+        <p class="demo-q reveal d4"><span>1</span>How many computer engineering seats does Pulchowk have?</p>
+        <p class="demo-q reveal d5"><span>2</span>Did form 2083-4001 pass?</p>
+        <p class="demo-q reveal d6"><span>3</span>What was the cutoff for Civil at Thapathali?</p>
+        <p class="demo-note reveal d7">Watch the sources appear underneath the answer. They are chosen by retrieval before the first token is written — not produced by the model.</p>
+    </div>
+    <div class="colophon reveal d8"><span><b>Minor Project Defense</b></span><span>4</span></div>
+</section>
+
+<!-- ============ 5 · REPLAY (BACKUP) ============
+     Real captured answers from the running system. Used if the live app,
+     the projector or Ollama misbehaves. -->
+<section class="slide">
+    <div class="masthead reveal d1"><span class="eyebrow">03 · Live — as answered</span><span class="eyebrow r">Sarathi</span></div>
+    <div class="body">
+        <p class="standfirst reveal d1" style="margin-bottom:26px">Three questions, three different mechanisms behind them: an exact seat table, an exact record lookup, and four years of published cutoffs.</p>
+        <div class="replay">
+            <div class="rp reveal d2">
+                <p class="ask">how many computer engineering seats does pulchowk have?</p>
+                <p class="ans">Pulchowk Campus has <span class="fig">36</span> Regular seats and <span class="fig">60</span> Full Fee seats for Computer Engineering.<span class="caret"></span></p>
+                <div class="src"><b>Sources</b>IOE BE/BArch Admission Booklet 2083 — campuses, seats and quotas</div>
+            </div>
+            <div class="rp reveal d4">
+                <p class="ask">did form 2083-4001 pass?</p>
+                <p class="ans">Yes. The candidate is on the published 2083 pass list — Manan Shrestha, Morang district, merit rank <span class="fig">1</span>, alphabetical serial <span class="fig">3131</span>.<span class="caret"></span></p>
+                <div class="src"><b>Sources</b>BE/BArch Entrance Examination Result 2083 — published pass list</div>
+            </div>
+            <div class="rp reveal d6">
+                <p class="ask">what was the cutoff for civil at thapathali?</p>
+                <p class="ans">The first list closed at rank <span class="fig">387</span> in 2082. Earlier years: <span class="fig">278</span>, <span class="fig">273</span>, <span class="fig">310</span>.<span class="caret"></span></p>
+                <div class="src"><b>Sources</b>Thapathali Campus first admission list, 2082 — via the published cutoff record</div>
+            </div>
+        </div>
+    </div>
+    <div class="colophon reveal d8"><span><b>Minor Project Defense</b></span><span>5</span></div>
+</section>
+
+<!-- ============ 6 · ARCHITECTURE ============ -->
+<section class="slide">
+    <div class="masthead reveal d1"><span class="eyebrow">04 · Architecture</span><span class="eyebrow r">LangGraph</span></div>
+    <div class="body">
+        <h2 class="reveal d1">One turn, eight nodes.</h2>
+        <p class="standfirst reveal d2">Two model calls in the steady state: one to choose the evidence, one to write the answer.</p>
+        <div class="graph reveal d3">
+            <span class="node plain">START</span><span class="arrow"></span>
+            <span class="node">prepare</span><span class="arrow"></span>
+            <span class="node">plan</span><span class="arrow"></span>
+            <span class="node">tools</span><span class="arrow"></span>
+            <span class="node">assemble</span><span class="arrow"></span>
+            <span class="node">answer</span><span class="arrow"></span>
+            <span class="node plain">summarize</span>
+        </div>
+        <div class="branch reveal d4">
+            <span class="node term">small_talk</span>
+            <span class="node term">deflect</span>
+            <span class="branchnote">— the two short paths: a greeting needs no evidence, and a request to write Python is turned away without one.</span>
+        </div>
+        <div class="nodekey reveal d5">
+            <div><code>plan</code>picks tools · <span class="fig">9</span> available</div>
+            <div><code>tools</code>run, results never reach the answering model</div>
+            <div><code>assemble</code>renders <span class="fig">11</span> blocks in a fixed order</div>
+            <div><code>answer</code>a model with <em>no tools bound</em></div>
+        </div>
+    </div>
+    <div class="colophon reveal d6"><span><b>Minor Project Defense</b></span><span>6</span></div>
+</section>
+
+<!-- ============ 7 · THE DESIGN DECISION ============ -->
+<section class="slide">
+    <div class="masthead reveal d1"><span class="eyebrow">05 · The decision everything hangs off</span><span class="eyebrow r">Sarathi</span></div>
+    <div class="body">
+        <h2 class="reveal d1">Tools <span class="q">select</span>. The application <span class="q">places</span>.</h2>
+        <p class="standfirst reveal d2">The model chooses which evidence a question needs. It has no say in where that evidence sits in the prompt.</p>
+        <div class="hair reveal d2"></div>
+        <div class="split">
+            <div>
+                <div class="colhead reveal d3">Why it matters</div>
+                <p class="para reveal d3">With a 7B model, <em>whatever sits nearest the question wins.</em> Tool results arriving as messages would be ordered by call order — which is to say, by the model.</p>
+                <p class="para reveal d4">So the app re-renders every result into its own ordered blocks. The worked fee figures go <b>last</b>, nearest the question.</p>
+            </div>
+            <div>
+                <div class="colhead warn reveal d3">What it cost to learn</div>
+                <p class="para reveal d4">Placed <em>ahead</em> of the retrieved documents, the fee block was ignored: the model went back to the raw fee tables in the retrieved text and multiplied them itself.</p>
+                <p class="para mute reveal d5">The answer was confident, well-formatted, and wrong. Issue 23 in the project log is that failure and its five rounds of layout work.</p>
+            </div>
+        </div>
+    </div>
+    <div class="colophon reveal d6"><span><b>Minor Project Defense</b></span><span>7</span></div>
+</section>
+
+<!-- ============ 8 · THE DETERMINISTIC FLOOR ============ -->
+<section class="slide">
+    <div class="masthead reveal d1"><span class="eyebrow">06 · The deterministic floor</span><span class="eyebrow r">Sarathi</span></div>
+    <div class="body">
+        <h2 class="reveal d1">The model may add tools.<br>It may not take any away.</h2>
+        <p class="standfirst reveal d2">Regexes that predate the rewrite still decide the minimum evidence a question gets. The model's choices are additive on top.</p>
+        <ul class="ruled">
+            <li class="reveal d3"><span class="lbl">ensure_default_calls</span><p class="txt">Guarantees the tool is <em>called</em> — retrieval always, plus the pass list, fees, seats or cutoffs whenever their detectors fire.</p></li>
+            <li class="reveal d4"><span class="lbl">enforce_floor</span><p class="txt">Guarantees the block <em>arrives</em>. Calling a tool turned out not to be the same as getting its answer.</p></li>
+            <li class="reveal d5 warn"><span class="lbl">Why both exist</span><p class="txt">The planner emitted <span class="fig bad">category: "full_fee"</span> against a strict enum. Schema validation failed, the call errored, and <b>nine cases lost their figures</b> while every other tool in the same batch succeeded — <span class="fig bad">49/53 → 44/53</span>.</p></li>
+        </ul>
+        <p class="para mute reveal d6" style="margin-top:26px">Total tool-selection failure now degrades to exactly the previous pipeline, plus a wasted half-second.</p>
+    </div>
+    <div class="colophon reveal d7"><span><b>Minor Project Defense</b></span><span>8</span></div>
+</section>
+
+<!-- ============ 9 · GROUNDED, NOT GENERATED ============ -->
+<section class="slide">
+    <div class="masthead reveal d1"><span class="eyebrow">07 · Grounded, not generated</span><span class="eyebrow r">Sarathi</span></div>
+    <div class="body">
+        <h2 class="reveal d1">The numbers check themselves.</h2>
+        <p class="standfirst reveal d2">Every module that holds figures stores line items only, derives every total, and asserts the result against what the notice printed.</p>
+        <div class="hair reveal d2"></div>
+        <div class="split">
+            <div>
+                <div class="colhead reveal d3">Self-verifying data</div>
+                <p class="para reveal d3"><span class="fig">seats.verify()</span> — 17 derived totals against the booklet's own subtotals and grand total.</p>
+                <p class="para reveal d4"><span class="fig">cutoffs.verify()</span> — all <span class="fig">228</span> rows, two ways. Every programme with a cutoff must have seats at that campus in a table transcribed by a <em>separate route</em>; every Full-fee cutoff must sit deeper than its Regular twin.</p>
+            </div>
+            <div>
+                <div class="colhead reveal d3">And when it cannot answer</div>
+                <p class="para reveal d4">Retrieval hands over its documents before the first token is written, so a citation is a record of what was read — not something the model composed.</p>
+                <p class="para reveal d5">When nothing matches, the app says so. <em>An honest "the published materials do not cover this" is a correct answer;</em> a plausible invented one is the failure this project exists to prevent.</p>
+            </div>
+        </div>
+    </div>
+    <div class="colophon reveal d6"><span><b>Minor Project Defense</b></span><span>9</span></div>
+</section>
+
+<!-- ============ 10 · EVALUATION ============ -->
+<section class="slide">
+    <div class="masthead reveal d1"><span class="eyebrow">08 · Evaluation</span><span class="eyebrow r">src/ioe/eval.py</span></div>
+    <div class="body">
+        <h2 class="reveal d1">It asserts the <span class="q">evidence</span>, not the prose.</h2>
+        <p class="standfirst reveal d2">Whether the sentence reads well is a judgement and needs a judge. Whether the worked fee figures were in front of the model is a fact — and it is the thing that actually breaks.</p>
+        <div class="split" style="gap:96px;margin-top:8px">
+            <div style="flex:1.5;display:flex;gap:64px">
+                <table class="ev">
+                    <colgroup><col class="g"><col class="n"></colgroup>
+                    <tr class="reveal d3"><th>Group</th><th class="n">Pass</th></tr>
+                    <tr class="reveal d3"><td class="g">fees</td><td class="n">15/15</td></tr>
+                    <tr class="reveal d4"><td class="g">results</td><td class="n">7/7</td></tr>
+                    <tr class="reveal d4"><td class="g">cutoffs</td><td class="n">7/7</td></tr>
+                    <tr class="reveal d5 miss"><td class="g">scope</td><td class="n">9/10</td></tr>
+                </table>
+                <table class="ev">
+                    <colgroup><col class="g"><col class="n"></colgroup>
+                    <tr class="reveal d3"><th>Group</th><th class="n">Pass</th></tr>
+                    <tr class="reveal d3"><td class="g">docs</td><td class="n">6/6</td></tr>
+                    <tr class="reveal d4"><td class="g">chances</td><td class="n">6/6</td></tr>
+                    <tr class="reveal d4"><td class="g">language</td><td class="n">3/3</td></tr>
+                    <tr class="reveal d5 miss"><td class="g">issue24</td><td class="n">5/6</td></tr>
+                </table>
+            </div>
+            <div>
+                <p class="evtotal reveal d6">64 / 66<small>across 10 groups, in about three minutes — no golden answers, nothing to grade by hand</small></p>
+            </div>
+        </div>
+        <p class="para mute reveal d7" style="margin-top:30px">It catches the failure this design is most exposed to: the model quietly deciding not to retrieve.</p>
+    </div>
+    <div class="colophon reveal d8"><span><b>Minor Project Defense</b></span><span>10</span></div>
+</section>
+
+<!-- ============ 11 · WHAT MEASUREMENT FOUND ============ -->
+<section class="slide">
+    <div class="masthead reveal d1"><span class="eyebrow">09 · Three things measurement found</span><span class="eyebrow r">Sarathi</span></div>
+    <div class="body">
+        <h2 class="reveal d1">Each one overturned the obvious answer.</h2>
+        <ul class="ruled" style="margin-top:26px">
+            <li class="reveal d3">
+                <span class="lbl">The prompt was<br>never read</span>
+                <p class="txt"><span class="fig">num_ctx</span> was unset, so Ollama served <span class="fig">4,096</span> tokens. A real turn assembles <span class="fig">5,318</span>. The overflow is discarded silently, <em>from the front</em> — which is where the system prompt sits. Proved directly: an <span class="fig">8,040</span>-token prompt evaluated <span class="fig">2,050</span> and answered from the filler.</p>
+            </li>
+            <li class="reveal d5">
+                <span class="lbl">A regex that could<br>never match</span>
+                <p class="txt">Five Devanagari fee terms sat inside <span class="fig">\b(…)\b</span>. A Devanagari word ends in a combining vowel sign, which Python does not count as a word character — so <span style="font-family:var(--deva)">धरौती</span> was not unreliable, it was <b>unreachable.</b></p>
+            </li>
+            <li class="reveal d7">
+                <span class="lbl">Never an<br>OCR problem</span>
+                <p class="txt"><span class="fig">13 of 15</span> source PDFs have a real text layer. One is annotated in our own corpus as <em>"a scanned PDF with no text layer"</em> — it has <span class="fig">14,827</span> characters of one, in a legacy font that maps Devanagari onto ASCII. It read as rubble, so it was retyped by hand.</p>
+            </li>
+        </ul>
+    </div>
+    <div class="colophon reveal d8"><span><b>Minor Project Defense</b></span><span>11</span></div>
+</section>
+
+<!-- ============ 12 · LIMITATIONS ============ -->
+<section class="slide">
+    <div class="masthead reveal d1"><span class="eyebrow">10 · Limitations</span><span class="eyebrow r">Stated, not discovered</span></div>
+    <div class="body">
+        <h2 class="reveal d1">What it does not do.</h2>
+        <div class="hair reveal d2"></div>
+        <div class="split">
+            <div>
+                <div class="colhead warn reveal d3">The weak-evidence gap · 2 of 66</div>
+                <p class="para reveal d3">An off-topic question can still find a plausible-looking document and be answered instead of declined.</p>
+                <p class="para reveal d4">Measured rather than assumed: off-topic questions score <span class="fig bad">0.357–0.576</span> against the corpus, genuine ones <span class="fig">0.562–0.701</span>. <b>The distributions overlap</b> — the worst off-topic outscores two real questions.</p>
+                <p class="para mute reveal d5">No threshold separates them. It needs a different mechanism, and raising the cutoff would start refusing real students.</p>
+            </div>
+            <div>
+                <div class="colhead reveal d3">And the honest rest</div>
+                <p class="para reveal d4">A 7B model on consumer hardware has a quality ceiling — it is why so much is computed in code rather than asked of it.</p>
+                <p class="para reveal d5">Priority allocation is <b>Pulchowk only</b>, one year. Cutoffs are four campuses, open category, first list.</p>
+                <p class="para reveal d6">No user study yet. Every claim here is about the system, not about students using it.</p>
+            </div>
+        </div>
+    </div>
+    <div class="colophon reveal d7"><span><b>Minor Project Defense</b></span><span>12</span></div>
+</section>
+
+<!-- ============ 13 · FUTURE WORK ============ -->
+<section class="slide">
+    <div class="masthead reveal d1"><span class="eyebrow">11 · Next</span><span class="eyebrow r">Sarathi</span></div>
+    <div class="body">
+        <h2 class="reveal d1">What comes next, and what it costs.</h2>
+        <ul class="ruled" style="margin-top:30px">
+            <li class="reveal d3"><span class="lbl">Second campus</span><p class="txt">The allocation engine is already general — adding Thapathali is <em>a CSV and a code table</em>, no code change.</p></li>
+            <li class="reveal d4"><span class="lbl">The 2 of 66</span><p class="txt">Close the weak-evidence gap with a mechanism rather than a threshold, since the threshold is measured not to exist.</p></li>
+            <li class="reveal d5"><span class="lbl">Continuous intake</span><p class="txt">Run the extraction review queue on a schedule, so a notice published this morning is answerable this afternoon — after a human has read it.</p></li>
+            <li class="reveal d6"><span class="lbl">A user study</span><p class="txt">Real applicants, real questions, during a real admission cycle. The one claim this project cannot yet make.</p></li>
+        </ul>
+    </div>
+    <div class="colophon reveal d7"><span><b>Minor Project Defense</b></span><span>13</span></div>
+</section>
+
+<!-- ============ 14 · Q&A ============ -->
+<section class="slide">
+    <div class="masthead reveal d1" style="border-bottom-width:2px">
+        <span class="eyebrow">Questions</span>
+        <span class="eyebrow r">Tribhuvan University · Pulchowk</span>
+    </div>
+    <div class="t-dateline reveal d2">
+        <div class="bs">२०८३<br>भाद्र ११</div>
+        <div class="ad">2026-08-27</div>
+    </div>
+    <div class="t-body">
+        <h1 class="reveal d2" style="font-size:196px">Thank you</h1>
+        <p class="t-deva reveal d3">धन्यवाद</p>
+        <p class="t-lede reveal d4" style="margin-top:26px">Sarathi — <em>सारथी, the one who steers you where you are going.</em></p>
+    </div>
+    <div class="claims reveal d5">
+        <div><b>Seven sources</b><p>Unified, admission and entrance only.</p></div>
+        <div><b>64 / 66</b><p>Evidence asserted, not prose graded.</p></div>
+        <div><b>Nothing leaves</b><p>No API key. No cloud. One machine.</p></div>
+    </div>
+    <div class="colophon reveal d6">
+        <span><b>Sabin Shrestha · Sachin</b></span>
+        <span>github.com/masabinhok/sarathi</span>
+    </div>
+</section>
+
+</main>
+
+<div class="deck-controls">
+    <button id="prevBtn" aria-label="Previous slide">◀</button>
+    <span id="counter">1 / 14</span>
+    <button id="nextBtn" aria-label="Next slide">▶</button>
+</div>
+</div>
+
+<script>
+/* ===========================================
+   SLIDE PRESENTATION CONTROLLER
+   Fixed 1920×1080 stage, scaled as a whole. Keyboard, wheel, touch.
+   =========================================== */
+class SlidePresentation {
+    constructor() {
+        this.slides = Array.from(document.querySelectorAll('.slide'));
+        this.stage = document.getElementById('deckStage');
+        this.counter = document.getElementById('counter');
+        this.current = 0;
+        this.setupStageScale();
+        this.setupKeyboardNav();
+        this.setupPointerNav();
+        this.setupEditing();
+        this.restore();
+        this.showSlide(this.current);
+    }
+
+    /* Scale the whole stage with one transform. Never reflow slide content. */
+    setupStageScale() {
+        const scale = () => {
+            const factor = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+            const x = (window.innerWidth - 1920 * factor) / 2;
+            const y = (window.innerHeight - 1080 * factor) / 2;
+            this.stage.style.transform = `translate(${x}px, ${y}px) scale(${factor})`;
+        };
+        scale();
+        window.addEventListener('resize', scale);
+    }
+
+    setupKeyboardNav() {
+        document.addEventListener('keydown', (e) => {
+            // Never steal keys while editing text, or while typing in the demo iframe.
+            if (document.body.classList.contains('editing') && e.key !== 'Escape'
+                && !(e.ctrlKey || e.metaKey)) return;
+            switch (e.key) {
+                case 'ArrowRight': case 'ArrowDown': case ' ': case 'PageDown':
+                    e.preventDefault(); this.next(); break;
+                case 'ArrowLeft': case 'ArrowUp': case 'PageUp':
+                    e.preventDefault(); this.prev(); break;
+                case 'Home': e.preventDefault(); this.showSlide(0); break;
+                case 'End': e.preventDefault(); this.showSlide(this.slides.length - 1); break;
+                case 'e': case 'E':
+                    if (!e.ctrlKey && !e.metaKey) { e.preventDefault(); this.toggleEditing(); }
+                    break;
+                case 's': case 'S':
+                    if (e.ctrlKey || e.metaKey) { e.preventDefault(); this.save(); }
+                    break;
+                case 'Escape':
+                    if (document.body.classList.contains('editing')) this.toggleEditing();
+                    break;
+            }
+        });
+    }
+
+    setupPointerNav() {
+        document.getElementById('nextBtn').addEventListener('click', () => this.next());
+        document.getElementById('prevBtn').addEventListener('click', () => this.prev());
+
+        let wheelLock = false;
+        window.addEventListener('wheel', (e) => {
+            if (wheelLock || Math.abs(e.deltaY) < 24) return;
+            wheelLock = true;
+            e.deltaY > 0 ? this.next() : this.prev();
+            setTimeout(() => { wheelLock = false; }, 520);
+        }, { passive: true });
+
+        let startX = 0, startY = 0;
+        window.addEventListener('touchstart', (e) => {
+            startX = e.changedTouches[0].clientX; startY = e.changedTouches[0].clientY;
+        }, { passive: true });
+        window.addEventListener('touchend', (e) => {
+            const dx = e.changedTouches[0].clientX - startX;
+            const dy = e.changedTouches[0].clientY - startY;
+            if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy)) dx < 0 ? this.next() : this.prev();
+        }, { passive: true });
+    }
+
+    next() { this.showSlide(this.current + 1); }
+    prev() { this.showSlide(this.current - 1); }
+
+    showSlide(index) {
+        this.current = Math.max(0, Math.min(index, this.slides.length - 1));
+        this.slides.forEach((slide, i) => {
+            const on = i === this.current;
+            slide.classList.toggle('active', on);
+            slide.classList.toggle('visible', on);
+        });
+        this.counter.textContent = `${this.current + 1} / ${this.slides.length}`;
+        try { localStorage.setItem('sarathi-deck-slide', String(this.current)); } catch (err) { /* private mode */ }
+    }
+
+    /* === INLINE EDITING ===
+       Press E, click any text, Ctrl+S writes a copy of the edited file. */
+    setupEditing() {
+        this.editables = this.stage.querySelectorAll('h1,h2,p,li .txt,td,.eyebrow,.colhead,.claims b,.src,.ask,.ans,.branchnote,.nodekey div');
+        try {
+            const saved = localStorage.getItem('sarathi-deck-content');
+            if (saved) this.stage.innerHTML = saved;
+        } catch (err) { /* ignore */ }
+    }
+
+    toggleEditing() {
+        const on = !document.body.classList.contains('editing');
+        document.body.classList.toggle('editing', on);
+        this.stage.querySelectorAll('h1,h2,p,td,.eyebrow,.colhead,.src,.ask,.ans')
+            .forEach((el) => el.setAttribute('contenteditable', on ? 'true' : 'false'));
+        if (!on) {
+            try { localStorage.setItem('sarathi-deck-content', this.stage.innerHTML); } catch (err) { /* ignore */ }
+        }
+    }
+
+    save() {
+        try { localStorage.setItem('sarathi-deck-content', this.stage.innerHTML); } catch (err) { /* ignore */ }
+        const html = '<!doctype html>\n<html lang="en">' + document.documentElement.innerHTML + '</html>';
+        const blob = new Blob([html], { type: 'text/html' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'sarathi-defense.html';
+        a.click();
+        URL.revokeObjectURL(a.href);
+    }
+
+    restore() {
+        try {
+            const at = parseInt(localStorage.getItem('sarathi-deck-slide') || '0', 10);
+            if (!Number.isNaN(at)) this.current = Math.min(at, this.slides.length - 1);
+        } catch (err) { this.current = 0; }
+        // Always open on the title slide for a real presentation.
+        this.current = 0;
+    }
+}
+
+new SlidePresentation();
+</script>
+</body>
+</html>

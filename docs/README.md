@@ -77,6 +77,21 @@ uv run ioe-index
 
 Nothing is picked up until that runs.
 
+### `data/<campus>_priority_<year>.csv` — who applied for what
+
+The published priority applications: one row per candidate, with their merit rank, their
+ordered programme codes, and their quota group. `src/ioe/priority.py` walks these in merit
+order and places each applicant into the best still-open programme on their own list,
+which reconstructs that year's allocation exactly — IOE admits by a serial dictatorship,
+so the outcome is fully determined by data that is already public.
+
+Only `pulchowk_priority_2083.csv` exists. The filename is the interface: drop in
+`thapathali_priority_2084.csv` and add that campus's priority-code table to
+`priority.CODES`, and it is covered with no other change.
+
+Seat counts come from `seats.py`, never from this file, so the booklet is transcribed once
+and a disagreement between the two is a `verify()` failure rather than a silent drift.
+
 ### `data/cutoffs.csv` — 2079–2082 first-list cutoffs
 
 The lowest merit rank actually admitted to a programme, per campus, per category, per

@@ -36,6 +36,7 @@ FEES = "fees"
 SEATS = "seats"
 PRIORITY = "priority"
 CUTOFFS = "cutoffs"
+CHANCES = "chances"
 NOTICES = "notices"
 # Two different things, and collapsing them cost a false failure.
 #
@@ -161,17 +162,43 @@ CASES: list[tuple[str, str, set[str], set[str]]] = [
     # must not drag in the stranger who actually holds that rank -- which is the hazard
     # results.lookup_context's skip_ranks was added for.
     ("cutoffs", "i got rank 660, what can i study", {CUTOFFS}, {LOOKUP, DECLINED}),
+    # Written when cutoffs was the only answer to this. It names Pulchowk, so the
+    # allocation supersedes the published history -- the expectation moved, not the code.
     (
         "cutoffs",
         "is rank 340 enough for computer engineering at pulchowk",
-        {CUTOFFS},
-        {LOOKUP, DECLINED},
+        {CHANCES},
+        {CUTOFFS, LOOKUP, DECLINED},
     ),
     ("cutoffs", "what was the cutoff for civil at thapathali", {CUTOFFS}, {DECLINED}),
     ("cutoffs", "can i get mechanical with my rank", {CUTOFFS}, {DECLINED}),
     ("cutoffs", "what is the closing rank for architecture", {CUTOFFS}, {DECLINED}),
     ("cutoffs", "who is rank 340", {LOOKUP}, {CUTOFFS, DECLINED}),
     ("cutoffs", "did form 2083-4001 pass", {LOOKUP}, {CUTOFFS, DECLINED}),
+    # ── Priority allocation. Issue 31. chances supersedes cutoffs at Pulchowk, because
+    # with both present the model quoted a published 2082 figure inside an answer about
+    # the 2083 simulation. A campus with no priority data must fall back to cutoffs and
+    # must never be answered with Pulchowk's allocation.
+    (
+        "chances",
+        "my rank is 500, what should i put as my first priority at pulchowk",
+        {CHANCES},
+        {CUTOFFS, DECLINED},
+    ),
+    ("chances", "i am rank 2000, can i get computer at pulchowk", {CHANCES}, {CUTOFFS}),
+    ("chances", "rank 40, which programmes can i get", {CHANCES}, {CUTOFFS, DECLINED}),
+    (
+        "chances",
+        "i got rank 300, what can i get at thapathali",
+        {CUTOFFS},
+        {CHANCES, DECLINED},
+    ),
+    (
+        "chances",
+        "what happens if i refuse a lower priority seat",
+        {PRIORITY},
+        {CHANCES, DECLINED},
+    ),
 ]
 
 # ── Conversations ─────────────────────────────────────────────────────────────

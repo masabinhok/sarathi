@@ -16,7 +16,8 @@ src/ioe/graph.py      LangGraph graph: query rewrite -> retrieve -> lookup -> an
 src/ioe/rag.py        document loading, chunking, Chroma index, retrieval + reranking
 src/ioe/results.py    exact lookup over the published entrance pass list
 src/ioe/fees.py       fee totals worked out from the published fee tables
-src/ioe/priority.py   last year's Pulchowk cutoffs, simulated from the priority list
+src/ioe/priority.py   Pulchowk's priority rules, and its allocation re-simulated
+src/ioe/cutoffs.py    published first-list cutoffs, 2079-2082, four campuses
 src/ioe/dates.py      current date in BS/AD, Bikram Sambat conversion
 src/ioe/deadlines.py  dated obligations mined from the indexed documents
 src/ioe/notices.py    scraper for the IOE boards and campus admission portals

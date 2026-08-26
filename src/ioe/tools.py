@@ -50,8 +50,11 @@ from ioe.rag import (
 #   notices    what has been published lately, titles only
 #   lookup     exact records from the published pass list
 #   seats      published admission targets
-#   priority   Pulchowk's priority-order rules
-#   cutoffs    what rank was actually admitted, when that is known
+#   priority   Pulchowk's priority-order rules -- the mechanism
+#   chances    what this student's rank would actually have been placed into, worked out
+#              from the published applications. After the rules, because it is the rules
+#              applied, and a reader needs the mechanism before the result.
+#   cutoffs    what rank was actually admitted in past years, when that is known
 #   documents  retrieved passages
 #   fees       worked fee totals. LAST, and see fees.fee_context for what it cost to
 #              learn that: ahead of the documents it was ignored, because retrieval puts
@@ -66,6 +69,7 @@ BLOCK_ORDER = (
     "lookup",
     "seats",
     "priority",
+    "chances",
     "cutoffs",
     "documents",
     "fees",
@@ -74,7 +78,15 @@ BLOCK_ORDER = (
 
 # The blocks that count as evidence. A turn that assembles none of these has nothing to
 # answer from, and gets the `uncovered` instruction instead of being left to improvise.
-EVIDENCE_BLOCKS = ("lookup", "seats", "priority", "cutoffs", "documents", "fees")
+EVIDENCE_BLOCKS = (
+    "lookup",
+    "seats",
+    "priority",
+    "chances",
+    "cutoffs",
+    "documents",
+    "fees",
+)
 
 
 def render_blocks(blocks: dict[str, str]) -> list[str]:
@@ -269,6 +281,34 @@ def priority_rules(
 
 
 @tool
+def priority_chance(
+    state: Annotated[dict | None, InjectedState] = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = "",
+) -> Command:
+    """What a student's rank would actually have been placed into at Pulchowk, worked out
+    from the published priority applications rather than from a past year's cutoff.
+
+    Use this when a student gives their entrance rank and asks which programmes they can
+    realistically get at Pulchowk, what to put first, or whether a particular programme is
+    a realistic first priority. Prefer it over cutoff_standing for Pulchowk, because it is
+    computed from who actually applied this year rather than from last year's outcome.
+
+    Pulchowk only, and open category only. Returns nothing if the question names another
+    campus or gives no rank.
+    """
+    raw = (state or {}).get("raw_question") or ""
+    block = priority.chance_context(raw)
+    if not block:
+        return _done(
+            tool_call_id,
+            "Not a Pulchowk priority question, or no rank given.",
+        )
+    return _done(
+        tool_call_id, "Priority allocation worked out.", blocks={"chances": block}
+    )
+
+
+@tool
 def cutoff_standing(
     campus: str = "",
     programme: str = "",
@@ -369,6 +409,7 @@ TOOLS = [
     fee_totals,
     seat_counts,
     priority_rules,
+    priority_chance,
     cutoff_standing,
     convert_bs_date,
     latest_notices,

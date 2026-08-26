@@ -187,6 +187,14 @@ SCOPE = (
     "priorities), and no figures exist for Chitwan or for any affiliated college."
 )
 
+# A smaller rank number being better is not something a 7B model reliably knows -- see
+# priority.format_rank_guidance, where it read "last admitted rank 55" as standing above
+# a rank of 2000. So the comparison is spelled out rather than left to be derived.
+ORDINAL = (
+    "A smaller rank number is better. A programme was within reach only if the student's "
+    "rank is a smaller number than, or equal to, the lowest rank it admitted."
+)
+
 CAVEAT = (
     "State the year of every figure you quote. A cutoff moves each year with the size of "
     "the applicant pool and the seat count, so past years are guidance and never a "
@@ -244,6 +252,8 @@ def reachable_context(rank: int, category: str = "Regular") -> str:
             "at all -- so this is not the same as saying there is nothing available.\n"
             + SCOPE
             + "\n"
+            + ORDINAL
+            + "\n"
             + CAVEAT
         )
     width = max(len(programme) for _, programme, _ in options) + 2
@@ -260,6 +270,8 @@ def reachable_context(rank: int, category: str = "Regular") -> str:
         + "\n"
         "List these as what happened in that year, not as what the student will get.\n"
         + SCOPE
+        + "\n"
+        + ORDINAL
         + "\n"
         + CAVEAT
     )
@@ -285,6 +297,8 @@ def history_context(campus: str, programme: str, category: str = "Regular") -> s
         f"Lowest rank admitted in the first list, by year:\n  {_trend(recorded)}\n"
         + (f"Published list this comes from: {source}\n" if source else "")
         + SCOPE
+        + "\n"
+        + ORDINAL
         + "\n"
         + CAVEAT
     )
@@ -341,6 +355,8 @@ def cutoff_context(
         f"Reading: {rank} is {reading}.\n"
         + (f"Published list this comes from: {source}\n" if source else "")
         + SCOPE
+        + "\n"
+        + ORDINAL
         + "\n"
         + CAVEAT
     )

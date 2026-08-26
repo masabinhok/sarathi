@@ -54,7 +54,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import REMOVE_ALL_MESSAGES, MessagesState, add_messages
 from langgraph.prebuilt import ToolNode
 
-from ioe import cutoffs, fees, results, seats
+from ioe import cutoffs, fees, priority, results, seats
 from ioe.dates import annotate_dates, today_context
 from ioe.fees import FEE_SOURCE
 from ioe.language import (
@@ -250,6 +250,12 @@ def ensure_default_calls(calls: list[dict], state: ChatState) -> list[dict]:
         cutoffs.is_cutoff_question(raw) or cutoffs.is_cutoff_question(english)
     ):
         out.append(_call("cutoff_standing", {"campus": "", "programme": ""}, len(out)))
+    if "priority_chance" not in named and priority.chance_context(raw):
+        out.append(_call("priority_chance", {}, len(out)))
+    if "priority_rules" not in named and (
+        priority.is_rules_question(raw) or priority.is_rules_question(english)
+    ):
+        out.append(_call("priority_rules", {}, len(out)))
     return out
 
 
@@ -353,12 +359,42 @@ def enforce_floor(blocks: dict[str, str], state: ChatState) -> dict[str, str]:
         if recovered:
             blocks["seats"] = recovered
 
+    # The rules are the highest-stakes prose in the corpus -- section 5 is the one that
+    # says an applicant who turns down a lower priority is out of the process entirely --
+    # and whether they appeared was left to the planner, which is to say to chance. It
+    # came and went between identical runs of the suite.
+    if not blocks.get("priority") and (
+        priority.is_rules_question(raw) or priority.is_rules_question(english)
+    ):
+        blocks["priority"] = priority.priority_context()
+
+    # Pulchowk's own allocation, when the question is one it can answer. This is better
+    # evidence than a past year's cutoff -- it is computed from who actually applied --
+    # so it goes in whatever the planner chose.
+    if not blocks.get("chances"):
+        recovered = priority.chance_context(raw)
+        if recovered:
+            blocks["chances"] = recovered
+
+    # The allocation supersedes the published cutoffs where both could speak. Measured
+    # with both present, the model quoted a 2082 cutoff inside an answer about the 2083
+    # simulation: two sets of rank figures about the same programmes is one set too many,
+    # and the one computed from who actually applied is the better one.
+    #
+    # Emptied rather than deleted, because `blocks` reduces with merge_blocks and a
+    # dropped key is simply re-supplied from the accumulated state on the next merge.
+    # render_blocks and the eval's evidence() both read an empty string as absent.
+    if blocks.get("chances"):
+        blocks["cutoffs"] = ""
+
     # A rank sitting in a prompt beside a seat count, with no cutoff block to say what a
     # rank actually reached, is the exact confusion SYSTEM_PROMPT has a rule against. If
     # the detector says this is a chances question, the cutoff figures are in the prompt
     # whatever the planner did.
-    if not blocks.get("cutoffs") and (
-        cutoffs.is_cutoff_question(raw) or cutoffs.is_cutoff_question(english)
+    if (
+        not blocks.get("chances")
+        and not blocks.get("cutoffs")
+        and (cutoffs.is_cutoff_question(raw) or cutoffs.is_cutoff_question(english))
     ):
         ranks = results.find_ranks(raw, include_topper=False)
         programmes = seats.find_programmes(raw)

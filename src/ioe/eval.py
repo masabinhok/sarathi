@@ -317,6 +317,81 @@ def _check(got: set[str], want: set[str], forbid: set[str]) -> str:
     return ""
 
 
+# ── Figures ───────────────────────────────────────────────────────────────────
+# The rest of this suite asserts which evidence reached the model and deliberately does
+# not grade prose. That left one class of failure invisible: the block was correct, the
+# evidence assertion passed, and the model read the wrong line out of it. Asked what the
+# whole degree costs at Full Fee it answered 218,070 -- the admission-day total, the line
+# directly above the right one -- and when told it was wrong it produced 190,456, which
+# appears in no table in the corpus.
+#
+# So these few cases do run the answer through and check that one number is in it. Not a
+# judgement about the sentence: a specific figure, printed in a block, either appearing or
+# not. They are slow, which is why there are five and not fifty.
+#
+# (thread, [(message, figure that must appear), ...])
+FIGURES: list[tuple[str, list[tuple[str, str]]]] = [
+    (
+        "degree-cost",
+        [
+            ("What does the whole degree cost at full fee?", "591,632"),
+            # The same question again after being contradicted. The model used to
+            # capitulate and invent rather than re-read.
+            ("you are so wrong", "591,632"),
+            # A two-word follow-up carrying none of its own intent: which figure it wants
+            # was stated a turn ago and nowhere else.
+            ("for regular", "72,287"),
+        ],
+    ),
+    (
+        "category",
+        [
+            # Full Fee, not the Regular figures the default used to supply.
+            (
+                (
+                    "if i get rank 40, will i get to study in pulchowk computer "
+                    "engineering full fee"
+                ),
+                "179",
+            ),
+        ],
+    ),
+    (
+        "admission-day",
+        [("how much do i pay on admission day as a regular student", "19,269")],
+    ),
+]
+
+
+async def check_figures(bot) -> tuple[int, int]:
+    """Run the answer node and check the stated figure appears. Returns (passed, total)."""
+    passed = total = 0
+    for name, turns in FIGURES:
+        thread = f"fig-{name}-{uuid.uuid4().hex[:8]}"
+        for message, figure in turns:
+            total += 1
+            started = time.time()
+            try:
+                state = await asyncio.wait_for(
+                    bot.ainvoke(
+                        {"messages": [HumanMessage(content=message)]},
+                        {"configurable": {"thread_id": thread}},
+                    ),
+                    timeout=TURN_TIMEOUT,
+                )
+                answer = state["messages"][-1].content or ""
+            except TimeoutError:
+                answer = ""
+            ok = figure in answer
+            passed += ok
+            took = time.time() - started
+            mark = "ok  " if ok else "FAIL"
+            print(f"{mark} figure     {took:5.1f}s  {message[:48]:50} wants {figure}")
+            if not ok:
+                print(f"     ^ answered: {answer[:150].strip()!r}")
+    return passed, total
+
+
 # ── The detector ──────────────────────────────────────────────────────────────
 # scope.is_task_substitution is the one deterministic thing standing between a student
 # and "here's a simple Python function". Its danger is not missing one -- it is firing on
@@ -401,6 +476,14 @@ async def run(groups: set[str] | None = None) -> int:
             print(f"{mark} {group:<9} {took:5.1f}s  {message[:52]:<52} {sorted(got)}")
             if problem:
                 print(f"     ^ {problem}")
+
+    # The figure checks run the answer node and are slow, so they are opt-in by group
+    # name and skipped on a filtered run that did not ask for them.
+    if not groups or "figures" in groups:
+        print("\n--- figures: the answer must state the figure the block printed")
+        passed, count = await check_figures(bot)
+        total += count
+        failures += count - passed
 
     print(f"\n{total - failures}/{total} passed")
     await close_saver(bot)

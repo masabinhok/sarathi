@@ -391,6 +391,55 @@ def history_context(campus: str, programme: str, category: str = "Regular") -> s
     )
 
 
+# Regular and Full-fee are separate admission sections and must never be read across.
+# fees.py already recognises the words a student uses; this maps its answer onto the two
+# categories a cutoff exists for.
+_CATEGORY_FROM_FEES = {"Regular": "Regular", "Full Fee": "Full-fee"}
+
+
+def find_category(text: str) -> str:
+    """The category the question names, or "" when it names none."""
+    from ioe import fees
+
+    for named in fees.find_categories(text or ""):
+        if named in _CATEGORY_FROM_FEES:
+            return _CATEGORY_FROM_FEES[named]
+    return ""
+
+
+def both_categories_context(
+    rank: int, campus: str, programme: str, asked: str = ""
+) -> str:
+    """Both categories for one programme, with the asked-for one marked.
+
+    Asked about Full Fee, the app used to build a Regular block: the floor called
+    cutoff_context without a category and the default won. Rather than depend on
+    detecting the category correctly, both are always rendered -- a student choosing
+    between them wants both anyway, and the model cannot pick the wrong one when the
+    right one is labelled in front of it.
+    """
+    parts = []
+    for category in CATEGORIES:
+        block = cutoff_context(rank, campus, programme, category)
+        if not history(campus, programme, category):
+            continue
+        if asked and category.casefold() == asked.casefold():
+            block = (
+                f"** The student asked about {category}. Answer from THIS block. **\n"
+                + block
+            )
+        parts.append(block)
+    if not parts:
+        return cutoff_context(rank, campus, programme, asked or "Regular")
+    if not asked:
+        parts.append(
+            "The student did not say which category. Give both, labelled, and say that "
+            "Regular and Full Fee are separate admission sections whose lists close at "
+            "different ranks -- never merge them into one figure."
+        )
+    return "\n\n".join(parts)
+
+
 def cutoff_context(
     rank: int, campus: str, programme: str, category: str = "Regular"
 ) -> str:

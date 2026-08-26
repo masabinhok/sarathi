@@ -33,6 +33,7 @@ from langgraph.types import Command
 
 from ioe import cutoffs, fees, notices, priority, results, seats
 from ioe.dates import annotate_dates
+from ioe.memory import previous_question
 from ioe.rag import (
     MIN_RELEVANCE,
     TOP_K,
@@ -87,6 +88,33 @@ EVIDENCE_BLOCKS = (
     "documents",
     "fees",
 )
+
+
+# Lines that already contain the settled answer rather than the evidence for it. A block
+# carrying one of these has done the work; the model's only remaining job is to say it.
+SETTLED_MARKERS = ("THE ANSWER TO THIS QUESTION IS", "** The student asked about")
+
+
+def settled_lines(blocks: dict[str, str]) -> list[str]:
+    """The already-decided lines, to be restated nearest the question.
+
+    Blocks are rendered before the conversation, and the conversation is rendered before
+    the question -- so on a follow-up the previous answer sits closer to the question than
+    the evidence does, and the model answers from it. Measured: asked the whole-degree cost
+    at Full Fee, told it was wrong, then "for regular", it produced 440,632 -- a number in
+    no table, arrived at somewhere between the Regular block above and the Full Fee answer
+    below it.
+
+    "Nearest the question wins" is the lesson this codebase keeps relearning. Here it is
+    applied one layer up: the settled figure is repeated after the conversation, where
+    nothing else can outrank it.
+    """
+    found: list[str] = []
+    for name in BLOCK_ORDER:
+        for line in (blocks.get(name) or "").splitlines():
+            if line.startswith(SETTLED_MARKERS):
+                found.append(line.strip())
+    return found
 
 
 def render_blocks(blocks: dict[str, str]) -> list[str]:
@@ -223,11 +251,12 @@ def fee_totals(
     """
     raw = (state or {}).get("raw_question") or ""
     english = (state or {}).get("question") or ""
+    earlier = previous_question((state or {}).get("messages") or [])
     named = " ".join(filter(None, [raw, english, _category(category) or ""]))
     block = (
-        fees.fee_context(raw)
-        or fees.fee_context(english)
-        or fees.fee_context(named, force=True)
+        fees.fee_context(raw, carried=earlier)
+        or fees.fee_context(english, carried=earlier)
+        or fees.fee_context(named, force=True, carried=f"{raw}\n{earlier}")
     )
     if not block:
         return _done(
@@ -332,11 +361,13 @@ def cutoff_standing(
     # can pass a rank can invent one, and here that would be a fabricated number sitting
     # next to real cutoffs -- the one place in this app where that is worst.
     ranks = results.find_ranks(raw, include_topper=False)
-    kind = _category(category) or "Regular"
+    # Read from the student's words first; the model's argument is only a fallback, and
+    # a category it cannot supply is better than one it guesses.
+    kind = cutoffs.find_category(raw) or _category(category) or ""
     if kind not in cutoffs.CATEGORIES:
         # Sponsored and foreign seats are allocated separately and no cutoff exists for
-        # them; falling back to Regular silently would answer a different question.
-        kind = "Regular"
+        # them, so an unrecognised category means "not stated" rather than Regular.
+        kind = ""
 
     named = seats.find_programmes(raw) or ([programme] if programme else [])
     where = seats.find_campuses(raw) or ([campus] if campus else [])
@@ -347,18 +378,18 @@ def cutoff_standing(
         # gave one, and as a plain history if they did not. "What was the cutoff for
         # Civil at Thapathali" does not need their rank and should not be asked for it.
         parts = [
-            cutoffs.cutoff_context(ranks[0], place, named[0], kind)
+            cutoffs.both_categories_context(ranks[0], place, named[0], kind)
             if ranks
-            else cutoffs.history_context(place, named[0], kind)
+            else cutoffs.history_context(place, named[0], kind or "Regular")
             for place in places
         ]
         block = "\n\n".join(part for part in parts if part)
         if not block:
-            block = cutoffs.cutoff_context(
+            block = cutoffs.both_categories_context(
                 ranks[0] if ranks else 0, places[0], named[0], kind
             )
     elif ranks:
-        block = cutoffs.reachable_context(ranks[0], kind)
+        block = cutoffs.reachable_context(ranks[0], kind or "Regular")
     else:
         block = (
             "[Cutoff history: no rank and no programme given]\n"

@@ -313,12 +313,77 @@ def is_fee_question(text: str) -> bool:
     return bool(_ADMISSION_SUBJECT.search(text) or find_categories(text))
 
 
-def fee_context(text: str, force: bool = False) -> str:
+# What the question is asking for, mapped to the row that answers it. The block already
+# carried every total as its own line and told the model to read the right one; asked
+# what the whole degree costs at Full Fee it read "TOTAL due on admission day" -- the
+# line above the one it wanted -- and answered 218,070 instead of 591,632. Told it was
+# wrong it produced 190,456, a figure that appears in no table at all.
+#
+# So the row is not selected by the model. The detector below picks it and the block
+# states it outright, which is the same discipline priority.format_rank_guidance uses on
+# a rank comparison and cutoffs.py uses on a closing rank.
+_WANTS = (
+    (
+        "degree",
+        re.compile(
+            r"\b(whole|entire|total|full|complete|all)\s+(?:\w+\s+){0,2}"
+            r"(degree|course|programme|program|study|studies|4\s*years?|four\s*years?)\b"
+            r"|\bdegree\s+cost\b|\bcost\s+of\s+the\s+degree\b"
+            r"|\b(8|eight)\s*semesters?\b|\bover\s+(?:the\s+)?(?:whole|entire)\b"
+            r"|\bin\s+total\s+for\b|\baltogether\b|\blifetime\b",
+            re.IGNORECASE,
+        ),
+        "TOTAL for the whole 8-semester degree",
+        "degree_total",
+    ),
+    (
+        "admission",
+        re.compile(
+            r"\b(on|at|due|during)\s+admission\b|\badmission\s+day\b"
+            r"|\bpay\s+now\b|\bright\s+now\b|\bto\s+(?:start|begin|enrol|enroll|join)\b"
+            r"|\bfirst\s+(?:instal?ment|payment)\b|\bup\s*front\b",
+            re.IGNORECASE,
+        ),
+        "TOTAL due on admission day",
+        "at_admission_total",
+    ),
+    (
+        "semester",
+        re.compile(
+            r"\b(per|each|one|a|every)\s+semester\b|\bsemester\s+fee\b", re.IGNORECASE
+        ),
+        "One semester of fees, all of table A together",
+        "per_semester",
+    ),
+    (
+        "deposit",
+        re.compile(r"\bdeposits?\b|\bdharauti\b|\brefundable\b|धरौटी", re.IGNORECASE),
+        "Deposits / \u0927\u0930\u094c\u091f\u0940, paid once, refundable",
+        "deposits",
+    ),
+)
+
+
+def wanted_row(text: str) -> tuple[str, str]:
+    """(label, totals key) of the row that answers this, or ("", "") if unspecific."""
+    for _, pattern, label, key in _WANTS:
+        if pattern.search(text or ""):
+            return label, key
+    return "", ""
+
+
+def fee_context(text: str, force: bool = False, carried: str = "") -> str:
     """Worked fee totals for the question, or "" if it is not about fees.
 
     Every figure is stated. Nothing is left for the model to add up, and the two things
     it invented when it had to reason -- a discount for Regular students, and a refund
     policy -- are contradicted here in as many words.
+
+    `carried` is earlier text from the same conversation, used only to work out which row
+    answers the question. A follow-up of two words -- "for regular", after being asked what
+    the whole degree costs -- carries none of its own intent, and the model handed a full
+    table with no row named invented a total that appears nowhere in it. The category comes
+    from the new message; the row comes from whichever message stated it.
 
     `force` is for a model that asked for these figures by name. The detector reads the
     student's wording, and a model calling the fee tool has read the conversation, which
@@ -328,7 +393,13 @@ def fee_context(text: str, force: bool = False) -> str:
     different sum of money and answering it from this table is the failure that check
     exists to prevent.
     """
-    if not force and not is_fee_question(text):
+    # A bare follow-up naming a category -- "for regular", "and full fee?" -- is a fee
+    # question in the light of the turn before it and in no other light. Without this the
+    # floor does not fire, the block depends on the planner choosing to call the tool, and
+    # the answer is right or wrong depending on which. Caught by eval.FIGURES failing on
+    # one run of two.
+    continuing = bool(carried and is_fee_question(carried) and find_categories(text))
+    if not force and not continuing and not is_fee_question(text):
         return ""
     if force and _OTHER_MONEY.search(text):
         return ""
@@ -349,7 +420,28 @@ def fee_context(text: str, force: bool = False) -> str:
         if unstated
         else ""
     )
-    blocks = format_table(asked) + caveat
+    # State the row that answers the question rather than leaving the model to find it.
+    # Placed above the table, because the failure was reading the line above the right
+    # one and every rule in this block sits above the table too.
+    row, key = wanted_row(text)
+    if not row:
+        row, key = wanted_row(carried)
+    lead = ""
+    if row:
+        # The figure, not merely the label. Naming the row was not enough: the table opens
+        # with "TOTAL due on admission day" and the model kept answering with it -- caught
+        # intermittently by eval.FIGURES even after the label was stated. Printing the
+        # number removes the selection step altogether, which is the move
+        # priority.format_rank_guidance makes when it welds the verdict to each line.
+        figures = "   ".join(f"{name} {_money(totals(name)[key])}" for name in asked)
+        lead = (
+            f"THE ANSWER TO THIS QUESTION IS -- {row}:   {figures}\n"
+            "State that figure. It is already a total: do not add anything to it, do not "
+            "read a different row, and if the student says you are wrong give this same "
+            "figure again rather than a different one. Never state an amount that is not "
+            "printed below.\n\n"
+        )
+    blocks = lead + format_table(asked) + caveat
     return f"""AUTHORITATIVE FEE FIGURES -- Pulchowk Campus BE/BArch admission and study
 fees, admission year 2083. Worked out from the notice's own tables; these override any
 fee table in the reference documents above.

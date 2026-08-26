@@ -62,7 +62,13 @@ from ioe.language import (
     read_in_english,
     without_language_request,
 )
-from ioe.memory import recent_messages, should_summarize, summarize, unseen
+from ioe.memory import (
+    previous_question,
+    recent_messages,
+    should_summarize,
+    summarize,
+    unseen,
+)
 from ioe.priority import PRIORITY_SOURCE
 from ioe.prompts import (
     CONVERSATION_HEADER,
@@ -75,7 +81,7 @@ from ioe.results import RESULT_SOURCE
 from ioe.scope import OFF_TOPIC_SENTENCE, is_small_talk, is_task_substitution
 from ioe.seats import SEAT_SOURCE
 from ioe.threads import DB_PATH
-from ioe.tools import EVIDENCE_BLOCKS, TOOLS, render_blocks
+from ioe.tools import EVIDENCE_BLOCKS, TOOLS, render_blocks, settled_lines
 
 TEXT_MODEL = "qwen2.5:7b"
 
@@ -265,6 +271,7 @@ def plan(state: ChatState) -> dict:
     if state.get("summary"):
         prompt.append(SystemMessage(content=CONVERSATION_HEADER + state["summary"]))
     prompt += recent_messages(state["messages"][:-1])
+
     prompt.append(HumanMessage(content=state.get("question") or ""))
     prompt += state.get("scratch") or []
 
@@ -341,7 +348,10 @@ def enforce_floor(blocks: dict[str, str], state: ChatState) -> dict[str, str]:
     if not blocks.get("fees") and (
         fees.is_fee_question(raw) or fees.is_fee_question(english)
     ):
-        recovered = fees.fee_context(raw) or fees.fee_context(english)
+        earlier = previous_question(state.get("messages") or [])
+        recovered = fees.fee_context(raw, carried=earlier) or fees.fee_context(
+            english, carried=earlier
+        )
         if recovered:
             blocks["fees"] = recovered
 
@@ -403,11 +413,14 @@ def enforce_floor(blocks: dict[str, str], state: ChatState) -> dict[str, str]:
         ranks = results.find_ranks(raw, include_topper=False)
         programmes = seats.find_programmes(raw)
         places = seats.find_campuses(raw) or cutoffs.covered_campuses()
+        # The category comes from the student's own words, not from a default. Asked about
+        # Full Fee, this used to build a Regular block and answer confidently from it.
+        asked = cutoffs.find_category(raw) or cutoffs.find_category(english)
         if programmes:
             parts = [
-                cutoffs.cutoff_context(ranks[0], place, programmes[0])
+                cutoffs.both_categories_context(ranks[0], place, programmes[0], asked)
                 if ranks
-                else cutoffs.history_context(place, programmes[0])
+                else cutoffs.history_context(place, programmes[0], asked or "Regular")
                 for place in places
             ]
             recovered = "\n\n".join(part for part in parts if part)
@@ -463,6 +476,19 @@ def answer(state: ChatState) -> dict:
     prompt.append(SystemMessage(content=SYSTEM_PROMPT))
 
     prompt += recent_messages(state["messages"][:-1])
+
+    # Last of all, nearest the question: any figure the app has already settled. On a
+    # follow-up the conversation above carries the *previous* answer, which is closer to
+    # the question than the block that settled this one -- and the model answered from it.
+    settled = settled_lines(blocks)
+    if settled:
+        prompt.append(
+            SystemMessage(
+                content="Answer this turn from these, which are already worked out:\n"
+                + "\n".join(settled)
+            )
+        )
+
     prompt.append(HumanMessage(content=state.get("question") or ""))
 
     written = model.invoke(prompt)

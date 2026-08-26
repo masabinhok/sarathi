@@ -101,3 +101,29 @@ def summarize(summary: str, fresh: list[AnyMessage]) -> str:
     except Exception:  # noqa: BLE001 - a summary is a convenience, never a requirement
         return summary
     return (written.content or "").strip() or summary
+
+
+# How many earlier turns a detector may look back over. Three, to match the short-term
+# memory window the model itself is shown -- a detector reading further back than the
+# model can see would ground an answer in something the model cannot account for.
+CARRY_TURNS = 3
+
+
+def previous_question(messages: list) -> str:
+    """The student's recent earlier messages, newest first, as one string.
+
+    For detectors that a bare follow-up starves: "for regular" is a fee question only in
+    the light of an earlier turn, and which figure it wants -- the admission-day total or
+    the whole-degree total -- was stated there and nowhere else.
+
+    Deliberately several turns rather than only the last one. Taking exactly the previous
+    message was wrong in the case that prompted this: asked the degree cost, told "you are
+    so wrong", then "for regular", the intent-carrying turn is two back and the one in
+    between carries nothing at all.
+    """
+    asked = [
+        message.content
+        for message in messages or []
+        if isinstance(message, HumanMessage) and isinstance(message.content, str)
+    ]
+    return "\n".join(reversed(asked[:-1][-CARRY_TURNS:]))

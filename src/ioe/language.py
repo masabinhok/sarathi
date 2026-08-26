@@ -76,11 +76,33 @@ ENGLISH_ONLY_SENTENCE = (
     "reliable enough in any other language to be trusted with something you will act on."
 )
 
-TRANSLATE_PROMPT = """Translate the student's message into English.
+# The glossary is not decoration. Without it the model translated "धरौती कति हो" -- how
+# much is the deposit -- as "How many districts are there", and the whole turn then went
+# to a question nobody asked: the fee block was assembled correctly off the raw message by
+# fees.is_fee_question, and the answering model, reading the translated question, wrote
+# about districts and invented a count of them.
+#
+# That failure is invisible from anywhere else. The eval suite asserts which evidence a
+# turn assembled, and the evidence was right; only the prose was wrong. So the terms a
+# 7B model cannot be expected to know in this domain are given to it outright, which is
+# the same discipline the rest of the app uses on anything it will not leave to inference.
+TRANSLATE_PROMPT = """Translate the student's message into English. It is about \
+engineering college admission in Nepal.
 
 Output only the translation. No preamble, no quotes, no explanation, no note about what \
 you did. Keep a question a question. Leave proper nouns, form numbers, dates and any \
 English already in the message exactly as they are.
+
+These words have one meaning here and no other:
+धरौती = deposit (a refundable security deposit) -- never "district"
+शुल्क = fee
+भर्ना = admission
+प्राथमिकता = priority
+सिट / सीट = seat
+नतिजा = result
+योग्यताक्रम = merit rank
+आवेदन = application
+क्याम्पस = campus
 
 Message: {question}
 

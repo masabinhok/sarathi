@@ -9,6 +9,13 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /app
 
+# poppler-utils supplies pdftotext, which src/ioe/extract.py shells out to. Of the fifteen
+# notice PDFs measured, thirteen carry a real text layer, so extraction rather than OCR is
+# what this needs -- one 400 KB apt package instead of tesseract and a language pack.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
+
 # Dependencies resolve from the lockfile alone, so editing src/ does not re-resolve them.
 # README.md is listed as the project readme, so the build backend needs it present.
 COPY pyproject.toml uv.lock README.md ./

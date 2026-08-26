@@ -19,10 +19,11 @@ src/ioe/fees.py       fee totals worked out from the published fee tables
 src/ioe/priority.py   last year's Pulchowk cutoffs, simulated from the priority list
 src/ioe/dates.py      current date in BS/AD, Bikram Sambat conversion
 src/ioe/deadlines.py  dated obligations mined from the indexed documents
-src/ioe/notices.py    scraper for IOE / TU / campus notice boards
+src/ioe/notices.py    scraper for the IOE boards and campus admission portals
+src/ioe/extract.py    notice PDF text extraction, Preeti decoding, review queue
 src/ioe/api.py        FastAPI app: SSE chat streaming, notices, deadlines, admin
 src/ioe/main.py       terminal chat loop
-docs/                 source PDFs, English translations, and lookup tables
+docs/                 source PDFs, English translations, extracted notices, lookup tables
 web/                  Next.js frontend
 ```
 
@@ -95,6 +96,7 @@ Useful follow-ups:
 ```bash
 docker compose exec api ioe-index      # reindex after editing docs/
 docker compose exec api ioe-notices    # re-scrape the notice board
+docker compose exec api ioe-extract    # queue new notice PDFs for review in /admin
 docker compose logs -f api             # follow backend logs
 docker compose down                    # stop; add -v to discard index and notices too
 ```
@@ -175,10 +177,29 @@ editing anything in `docs/translated/`.
 uv run ioe-notices
 ```
 
-Scrapes recent notices from entrance.ioe.edu.np, ioe.tu.edu.np, tu.edu.np, and
-pcampus.edu.np into `.cache/notices.json`. The app reads only that cache and never
+Scrapes recent admission and entrance notices into `.cache/notices.json` from seven
+sources: the IOE Entrance Exam Board, the central admission portal, and the Pulchowk,
+Thapathali, Pashchimanchal, Purwanchal and Chitwan campuses. Tribhuvan University's
+general feeds are deliberately not among them. The app reads only that cache and never
 scrapes on request, so it works offline and stays fast. Skipping this leaves the notices
 section empty; nothing else is affected.
+
+### 6. Extract notice text (optional)
+
+```bash
+uv run ioe-extract
+```
+
+Downloads the PDFs behind the newest notices, pulls their text out with `pdftotext`, and
+writes each one to `.cache/pending/` for review. **Nothing is indexed by this command.**
+Approving an extraction is a person: open `/admin`, read the text, and press approve,
+which writes it to `docs/notices/` — then rebuild the index to publish it.
+
+The split is deliberate. `docs/README.md` explains that the failure mode which matters in
+this corpus is numeric drift, and machine extraction does not change that; it changes what
+a reviewer starts from. Extractions decoded from the Preeti legacy font are flagged in the
+admin list and carry a warning in the file, because that text was decoded rather than read
+and a wrong digit in it looks exactly like a right one.
 
 ### 6. Install frontend dependencies
 

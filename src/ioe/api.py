@@ -14,6 +14,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel
 from starlette.responses import StreamingResponse
 
+from ioe import extract as extract_mod
 from ioe import notices as notices_mod
 from ioe import threads as threads_mod
 from ioe.dates import today_payload
@@ -339,6 +340,9 @@ async def deadlines() -> dict:
 # --- admin -----------------------------------------------------------------------------
 
 UPLOAD_DIR = DOCS_DIR / "translated"
+# Kept apart from translated/ on purpose: a glance at the path says whether a document
+# was written by a person or extracted by a machine.
+NOTICE_DIR = DOCS_DIR / "notices"
 SAFE_NAME = re.compile(r"^[A-Za-z0-9._-]+\.md$")
 MAX_UPLOAD_BYTES = 2_000_000
 
@@ -433,6 +437,54 @@ async def delete_document(name: str) -> dict:
 async def reindex() -> dict:
     count = await asyncio.to_thread(build_index)
     return {"chunks": count}
+
+
+# --- extraction review queue -----------------------------------------------------------
+# Extracted notice text never reaches the index on its own. It waits here until a person
+# reads it and approves it, because the corpus is the thing every answer is grounded in
+# and a wrong figure in it is a student paying the wrong amount. See src/ioe/extract.py.
+
+
+@app.get("/api/admin/extract/pending", dependencies=[Depends(require_admin)])
+async def extract_pending() -> dict:
+    items = await asyncio.to_thread(extract_mod.pending)
+    return {"pending": items}
+
+
+@app.post("/api/admin/extract/harvest", dependencies=[Depends(require_admin)])
+async def extract_harvest() -> dict:
+    """Download the newest un-extracted notice PDFs and queue their text for review."""
+    return await asyncio.to_thread(extract_mod.harvest)
+
+
+class ReviewRequest(BaseModel):
+    key: str
+
+
+@app.post("/api/admin/extract/approve", dependencies=[Depends(require_admin)])
+async def extract_approve(request: ReviewRequest) -> dict:
+    """Write one reviewed extraction into the document set as Markdown.
+
+    Reindexing is left to the operator, the same as the upload route: it is the expensive
+    step and approving three notices should cost one rebuild, not three.
+    """
+    item = await asyncio.to_thread(extract_mod.take, request.key)
+    if item is None:
+        raise HTTPException(404, "no pending extraction with that key")
+    name = f"{extract_mod.slug(item.get('title', ''), request.key)}.md"
+    target = NOTICE_DIR / name
+    body = extract_mod.frontmatter(item) + (item.get("text") or "")
+    await asyncio.to_thread(NOTICE_DIR.mkdir, parents=True, exist_ok=True)
+    await asyncio.to_thread(target.write_text, body, "utf-8")
+    return {"name": name, "bytes": len(body), "reindex_required": True}
+
+
+@app.post("/api/admin/extract/reject", dependencies=[Depends(require_admin)])
+async def extract_reject(request: ReviewRequest) -> dict:
+    item = await asyncio.to_thread(extract_mod.take, request.key)
+    if item is None:
+        raise HTTPException(404, "no pending extraction with that key")
+    return {"rejected": item.get("title", ""), "pending": len(extract_mod.pending())}
 
 
 @app.post("/api/admin/notices/refresh", dependencies=[Depends(require_admin)])

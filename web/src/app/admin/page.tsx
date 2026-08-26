@@ -50,6 +50,19 @@ function setStoredToken(value: string) {
   window.dispatchEvent(new Event(TOKEN_EVENT));
 }
 
+/** One machine-extracted notice waiting on a person. See src/ioe/extract.py. */
+type Pending = {
+  key: string;
+  url: string;
+  title: string;
+  source: string;
+  date: string;
+  encoding: string;
+  preeti_lines: number;
+  chars: number;
+  text: string;
+};
+
 export default function Admin() {
   const token = useSyncExternalStore(
     tokenStore.subscribe,
@@ -61,12 +74,18 @@ export default function Admin() {
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [queue, setQueue] = useState<Pending[]>([]);
+  const [open, setOpen] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async (value: string) => {
     if (!value) return;
     try {
       setStatus(await adminFetch("/api/admin/status", value));
+      // The queue rides along with every status refresh, so approving one item
+      // re-reads the rest rather than leaving a stale card on screen.
+      const waiting = await adminFetch("/api/admin/extract/pending", value);
+      setQueue(waiting.pending ?? []);
       setError(null);
     } catch (err) {
       setStatus(null);
@@ -79,10 +98,12 @@ export default function Admin() {
     if (!token) return;
     let cancelled = false;
     adminFetch("/api/admin/status", token)
-      .then((data) => {
+      .then(async (data) => {
         if (cancelled) return;
         setStatus(data);
         setError(null);
+        const waiting = await adminFetch("/api/admin/extract/pending", token);
+        if (!cancelled) setQueue(waiting.pending ?? []);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -229,6 +250,135 @@ export default function Admin() {
               {busy === "upload" ? "Uploading…" : "Upload"}
             </button>
           </div>
+        </section>
+
+        {/* Extraction stops at this queue on purpose. Notice text pulled out of a PDF
+            is never indexed until somebody reads it here: the corpus is what every
+            answer is grounded in, and a wrong figure in it is a student paying the
+            wrong amount. */}
+        <section className="mb-8">
+          <div className="border-rule mb-3 flex flex-wrap items-baseline justify-between gap-2 border-b pb-2">
+            <p className="eyebrow">
+              Notices awaiting review
+              {queue.length ? ` \u00b7 ${queue.length}` : ""}
+            </p>
+            <button
+              disabled={busy !== null}
+              onClick={() =>
+                run("harvest", async () => {
+                  const result = await adminFetch(
+                    "/api/admin/extract/harvest",
+                    token,
+                    { method: "POST" },
+                  );
+                  return `Queued ${result.queued}. ${result.needs_ocr} scanned notice(s) could not be read.`;
+                })
+              }
+              className="border-rule hover:border-rule-strong rounded-[7px] border px-3 py-1.5 text-xs transition disabled:opacity-40"
+            >
+              {busy === "harvest" ? "Extracting\u2026" : "Extract new notices"}
+            </button>
+          </div>
+
+          {queue.length === 0 ? (
+            <p className="text-mute py-3 text-sm">
+              Nothing waiting. Extract new notices to pull text from the PDFs
+              the campuses have published since the last run.
+            </p>
+          ) : (
+            <ul>
+              {queue.map((item) => (
+                <li key={item.key} className="border-rule border-b py-3">
+                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <span className="text-ink flex-1 text-sm font-medium">
+                      {item.title || "Untitled notice"}
+                    </span>
+                    {/* Preeti is the one flag a reviewer must not miss: that text was
+                        decoded from a legacy font, not read, so a wrong digit there
+                        looks exactly like a right one. Crimson is the app's colour for
+                        consequence, which is what this is. */}
+                    {item.preeti_lines > 0 && (
+                      <span className="text-crimson text-[0.6875rem]">
+                        {item.preeti_lines} decoded line
+                        {item.preeti_lines === 1 ? "" : "s"}
+                      </span>
+                    )}
+                    <span className="text-faint text-[0.6875rem] tabular-nums">
+                      {item.source} \u00b7 {item.date || "no date"} \u00b7{" "}
+                      {item.chars.toLocaleString()} chars
+                    </span>
+                  </div>
+
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() =>
+                        setOpen(open === item.key ? null : item.key)
+                      }
+                      className="text-mute hover:text-ink text-xs transition"
+                      aria-expanded={open === item.key}
+                    >
+                      {open === item.key ? "Hide text" : "Read text"}
+                    </button>
+                    <a
+                      href={item.url}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="text-mute hover:text-lapis text-xs transition"
+                    >
+                      Original \u2197
+                    </a>
+                    <span className="flex-1" />
+                    <button
+                      disabled={busy !== null}
+                      onClick={() =>
+                        run("reject", async () => {
+                          const result = await adminFetch(
+                            "/api/admin/extract/reject",
+                            token,
+                            {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ key: item.key }),
+                            },
+                          );
+                          return `Discarded \u201c${result.rejected}\u201d.`;
+                        })
+                      }
+                      className="text-mute hover:text-crimson text-xs transition disabled:opacity-40"
+                    >
+                      Reject
+                    </button>
+                    <button
+                      disabled={busy !== null}
+                      onClick={() =>
+                        run("approve", async () => {
+                          const result = await adminFetch(
+                            "/api/admin/extract/approve",
+                            token,
+                            {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ key: item.key }),
+                            },
+                          );
+                          return `${result.name} added. Rebuild the index to publish it.`;
+                        })
+                      }
+                      className="border-rule hover:border-rule-strong rounded-[7px] border px-3 py-1 text-xs transition disabled:opacity-40"
+                    >
+                      Approve
+                    </button>
+                  </div>
+
+                  {open === item.key && (
+                    <pre className="scroll-thin border-rule text-mute mt-3 max-h-80 overflow-auto border-l pl-3 text-[0.75rem] leading-relaxed whitespace-pre-wrap">
+                      {item.text.slice(0, 20000)}
+                    </pre>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         <section className="mb-8">

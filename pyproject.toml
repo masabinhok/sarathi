@@ -28,6 +28,7 @@ dependencies = [
 ioe = "ioe.main:main"
 ioe-index = "ioe.rag:main"
 ioe-notices = "ioe.notices:main"
+ioe-extract = "ioe.extract:main"
 
 [build-system]
 requires = ["uv_build>=0.12.1,<0.13.0"]

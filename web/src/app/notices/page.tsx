@@ -15,10 +15,10 @@ export default function NoticesPage() {
           Everything the campuses have posted, newest first.
         </h1>
         <p className="text-mute mt-4 max-w-[46ch] text-[0.9375rem] leading-relaxed">
-          Collected from the Entrance Exam Board, the Institute of Engineering,
-          Tribhuvan University, and the Pulchowk, Pashchimanchal and Purwanchal
-          campuses. Links open the original notice on the site that published
-          it.
+          Collected from the Entrance Exam Board, the central admission portal,
+          and the Pulchowk, Thapathali, Pashchimanchal, Purwanchal and Chitwan
+          campuses &mdash; admission and entrance notices only. Links open the
+          original notice on the site that published it.
         </p>
 
         {/* Grid children default to min-width:auto, so without min-w-0 the widest

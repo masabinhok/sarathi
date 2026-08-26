@@ -9,7 +9,20 @@ import { fetchNotices, type NoticeFeed } from "@/lib/api";
 // the boards first, then the campuses. A source missing from this list would be
 // listed in the index but not filterable, so it must be extended alongside
 // SOURCES in src/ioe/notices.py.
-const SOURCE_ORDER = ["entrance", "ioe", "tu", "pcampus", "wrc", "ioepc"];
+const SOURCE_ORDER = [
+  "entrance",
+  "admission",
+  "pcampus",
+  "thapathali",
+  "pashchimanchal",
+  "purwanchal",
+  "chitwan",
+];
+
+// One screen of notices. Seven sources at twelve each is enough that the page was
+// becoming a scroll with no way back to the top, and the notice somebody wants is
+// almost always in the first screen anyway -- paging is for the archive, not the news.
+const PER_PAGE = 20;
 
 /** The full notice index: everything the sites have published, newest first.
  *  Search and source filtering live here rather than in the rail, because this is the
@@ -19,6 +32,7 @@ export default function Notices() {
   const [failed, setFailed] = useState(false);
   const [source, setSource] = useState("all");
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
     let live = true;
@@ -43,6 +57,16 @@ export default function Notices() {
         (!needle || notice.title.toLowerCase().includes(needle)),
     );
   }, [notices, source, query]);
+
+  // Page 3 of a filter that now has one page of results is an empty screen that looks
+  // like a broken search, so narrowing the list always returns to the first page.
+  useEffect(() => {
+    setPage(0);
+  }, [source, query]);
+
+  const pages = Math.max(1, Math.ceil(shown.length / PER_PAGE));
+  const start = Math.min(page, pages - 1) * PER_PAGE;
+  const visible = shown.slice(start, start + PER_PAGE);
 
   if (failed) {
     return (
@@ -97,12 +121,12 @@ export default function Notices() {
       ) : shown.length === 0 ? (
         <p className="text-mute py-10 text-[0.9375rem]">
           {notices.length === 0
-            ? "No notices collected yet. An administrator refreshes these from the IOE, TU and campus sites."
+            ? "No notices collected yet. An administrator refreshes these from the IOE boards and the campus admission portals."
             : "No notice matches that search."}
         </p>
       ) : (
         <ul>
-          {shown.map((notice, i) => (
+          {visible.map((notice, i) => (
             <li key={notice.url} className="border-rule border-b">
               <a
                 href={notice.url}
@@ -128,6 +152,33 @@ export default function Notices() {
             </li>
           ))}
         </ul>
+      )}
+
+      {feed && pages > 1 && (
+        <nav
+          aria-label="Notice pages"
+          className="border-rule flex items-center justify-between border-t pt-5 text-[0.8125rem]"
+        >
+          <button
+            onClick={() => setPage((n) => Math.max(0, n - 1))}
+            disabled={start === 0}
+            className="text-mute hover:text-ink disabled:text-faint transition disabled:cursor-default"
+          >
+            &larr; Newer
+          </button>
+          {/* Tabular figures so the count does not shift the buttons as it changes. */}
+          <span className="text-faint tabular-nums">
+            {start + 1}&ndash;{Math.min(start + PER_PAGE, shown.length)} of{" "}
+            {shown.length}
+          </span>
+          <button
+            onClick={() => setPage((n) => Math.min(pages - 1, n + 1))}
+            disabled={start + PER_PAGE >= shown.length}
+            className="text-mute hover:text-ink disabled:text-faint transition disabled:cursor-default"
+          >
+            Older &rarr;
+          </button>
+        </nav>
       )}
     </div>
   );

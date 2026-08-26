@@ -14,6 +14,7 @@ student there was no recent notice while the app displayed one from the day befo
 import datetime
 import json
 import re
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from urllib.parse import urljoin
@@ -27,6 +28,11 @@ CACHE_PATH = Path(__file__).resolve().parents[2] / ".cache" / "notices.json"
 USER_AGENT = "Mozilla/5.0 (compatible; IOE-Admission-Assistant/1.0)"
 TIMEOUT = 20.0
 PER_SOURCE_LIMIT = 12
+
+# The admission portals publish under a per-year path or subdomain, so next year is a
+# one-line change here rather than a hunt through SOURCES. Expect those sources to 404
+# when the cycle turns over: that is the year moving on, not a parser breaking.
+ADMISSION_YEAR = "2083"
 
 # Notice pages are not fetched. Sampling one page from every source, each turned out to be
 # a heading over a link to a scanned PDF -- the richest of them held 209 characters, most
@@ -82,28 +88,6 @@ def parse_entrance(html: str, base: str) -> list[Notice]:
     return out
 
 
-def parse_tu_theme(html: str, base: str) -> list[Notice]:
-    """tu.edu.np and ioe.tu.edu.np: date and title share one wrapper.
-
-    The two sites use different wrapper classes for the same layout, and each has pages
-    using the other's, so both selectors are tried rather than one per source.
-    """
-    soup = BeautifulSoup(html, "html.parser")
-    out: list[Notice] = []
-    for wrapper in soup.select(".recent-post-wrapper, .inner-notice-wrap"):
-        anchor = wrapper.find("a", href=True)
-        if not anchor:
-            continue
-        text = _clean(wrapper.get_text(" ", strip=True))
-        date = ""
-        if match := re.search(r"\b(\d{4})-(\d{2})-(\d{2})\b", text):
-            date = _iso(match.group(1), match.group(2), match.group(3))
-        title = _clean(re.sub(r"\b\d{4}-\d{2}-\d{2}\b", "", text))
-        if title and title != ".":
-            out.append(Notice(title, urljoin(base, anchor["href"]), date, "", ""))
-    return out
-
-
 def parse_pcampus(html: str, base: str) -> list[Notice]:
     """pcampus.edu.np is WordPress: the publication date is in the permalink itself."""
     soup = BeautifulSoup(html, "html.parser")
@@ -119,15 +103,40 @@ def parse_pcampus(html: str, base: str) -> list[Notice]:
     return out
 
 
+def _month_number(name: str) -> int | None:
+    """A month name, spelled out or abbreviated, as a number.
+
+    The WordPress sources write "August", the admission feeds write "Aug". A prefix is
+    accepted only when it picks out exactly one month, so "Ju" stays unknown rather than
+    silently becoming June.
+    """
+    name = name.lower()
+    if name in _MONTHS:
+        return _MONTHS[name]
+    matches = [number for month, number in _MONTHS.items() if month.startswith(name)]
+    return matches[0] if len(matches) == 1 else None
+
+
 def _iso_from_name(month: str, day: str, year: str) -> str:
     """ "August 22, 2026" -> 2026-08-22. Unknown month names yield no date, not a guess."""
-    number = _MONTHS.get(month.lower())
+    number = _month_number(month)
     return _iso(year, str(number), day) if number else ""
 
 
-def parse_wrc(html: str, base: str) -> list[Notice]:
-    """wrc.edu.np (Pashchimanchal): WordPress; each notice is an <article> whose h2 holds
-    the permalink, with the date written out in the surrounding text."""
+# "Mon, 24 Aug 2026" -- the shape both admission portals publish.
+_RFC_DATE = re.compile(r"\b(\d{1,2})\s+([A-Za-z]{3,})\s+(\d{4})\b")
+
+
+def _iso_from_rfc(text: str) -> str:
+    if not (match := _RFC_DATE.search(text)):
+        return ""
+    number = _month_number(match.group(2))
+    return _iso(match.group(3), str(number), match.group(1)) if number else ""
+
+
+def parse_wp_articles(html: str, base: str) -> list[Notice]:
+    """WordPress: each notice is an <article> whose h2 holds the permalink, with the date
+    written out in the surrounding text. Serves Pashchimanchal (ioepas.edu.np)."""
     soup = BeautifulSoup(html, "html.parser")
     out: list[Notice] = []
     for article in soup.select("article"):
@@ -146,64 +155,134 @@ def parse_wrc(html: str, base: str) -> list[Notice]:
     return out
 
 
-def parse_ioepc(html: str, base: str) -> list[Notice]:
-    """ioepc.edu.np (Purwanchal): cards carrying an ISO timestamp after the title."""
+def parse_admission_portal(html: str, base: str) -> list[Notice]:
+    """admission.ioe.edu.np: an htmx fragment, one table row per notice.
+
+    The row's anchor has href="#" and carries the real path inside an onclick argument,
+    so the link is read from there. A row whose path cannot be read is skipped rather
+    than published pointing at "#": a notice a student cannot open is worse than one
+    they never saw.
+    """
     soup = BeautifulSoup(html, "html.parser")
     out: list[Notice] = []
-    for card in soup.select(".card"):
-        anchor = card.find("a", href=True)
-        if not anchor:
+    for row in soup.select("tr"):
+        cells = [cell.get_text(" ", strip=True) for cell in row.find_all("td")]
+        if len(cells) < 3:
             continue
-        text = _clean(card.get_text(" ", strip=True))
+        anchor = row.find("a", onclick=True)
+        match = re.search(r"'(/[^']+)'", anchor["onclick"]) if anchor else None
+        title = _clean(cells[1])
+        if title and match:
+            date = _iso_from_rfc(cells[2])
+            out.append(Notice(title, urljoin(base, match.group(1)), date, "", ""))
+    return out
+
+
+def parse_admission_feed(text: str, base: str) -> list[Notice]:
+    """Thapathali and Chitwan: a JSON feed, {"notices": [{title, created, link}]}.
+
+    The only source that hands over structured data rather than markup, and the only one
+    whose links often point straight at the notice PDF instead of a page wrapping it.
+    """
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return []
+    out: list[Notice] = []
+    for item in payload.get("notices") or []:
+        title = _clean(str(item.get("title") or ""))
+        link = str(item.get("link") or "")
+        if title and link:
+            date = _iso_from_rfc(str(item.get("created") or ""))
+            out.append(Notice(title, urljoin(base, link), date, "", ""))
+    return out
+
+
+def parse_ioepc_admission(html: str, base: str) -> list[Notice]:
+    """admission.ioepc.edu.np (Purwanchal): a bootstrap row per notice, ISO date last."""
+    soup = BeautifulSoup(html, "html.parser")
+    out: list[Notice] = []
+    for anchor in soup.select('a[href*="notice-details/"]'):
+        row = anchor.find_parent("div", class_="row") or anchor.parent
+        text = _clean(row.get_text(" ", strip=True))
         date = ""
         if match := re.search(r"\b(\d{4})-(\d{2})-(\d{2})\b", text):
             date = _iso(*match.groups())
-        # The timestamp trails the title, minutes and all, and is not part of it.
-        title = _clean(re.sub(r"\b\d{4}-\d{2}-\d{2}(\s+[\d:]+)?", "", text))
+        # The row reads "1. <title> View Notice 2026-08-23"; none of that is the title.
+        title = re.sub(r"\b\d{4}-\d{2}-\d{2}\b", "", text)
+        title = re.sub(r"View\s+Notice", "", title, flags=re.IGNORECASE)
+        title = _clean(re.sub(r"^\d+\s*\.?\s*", "", title))
         if title:
             out.append(Notice(title, urljoin(base, anchor["href"]), date, "", ""))
     return out
 
 
+@dataclass(frozen=True)
+class Source:
+    key: str
+    label: str
+    url: str
+    parser: Callable[[str, str], list[Notice]]
+    # Thapathali and Chitwan answer their feed only on POST; a GET there returns
+    # {"Error":"Only POST method is allowed"} rather than an error status, so it would
+    # otherwise parse to zero notices and look like a site that had published nothing.
+    method: str = "GET"
+
+
+# Admission and entrance only. Tribhuvan University's own feeds used to be sources here
+# and are deliberately gone: a student asking when the admission list is published does
+# not need the university's unrelated notices competing for the six slots in the digest.
 SOURCES = [
-    (
+    Source(
         "entrance",
         "IOE Entrance Exam Board",
         "https://entrance.ioe.edu.np/Notice",
         parse_entrance,
     ),
-    (
-        "ioe",
-        "Institute of Engineering",
-        "https://ioe.tu.edu.np/notices",
-        parse_tu_theme,
+    Source(
+        "admission",
+        "IOE Central Admission Portal",
+        f"https://admission.ioe.edu.np/be/{ADMISSION_YEAR}/public/get-notices",
+        parse_admission_portal,
     ),
-    ("tu", "Tribhuvan University", "https://tu.edu.np/notices", parse_tu_theme),
-    (
+    Source(
         "pcampus",
         "Pulchowk Campus",
         "https://pcampus.edu.np/category/admission-notices/",
         parse_pcampus,
     ),
-    (
-        "wrc",
-        "Pashchimanchal Campus",
-        "https://wrc.edu.np/category/admission-notice/",
-        parse_wrc,
+    Source(
+        "thapathali",
+        "Thapathali Campus",
+        f"https://admission.tcioe.edu.np/be/{ADMISSION_YEAR}/get-feed.php",
+        parse_admission_feed,
+        method="POST",
     ),
-    (
-        "ioepc",
+    Source(
+        "pashchimanchal",
+        "Pashchimanchal Campus",
+        "https://ioepas.edu.np/category/news-notices/admission-notice",
+        parse_wp_articles,
+    ),
+    Source(
+        "purwanchal",
         "Purwanchal Campus",
-        "https://www.ioepc.edu.np/info/category/notice/",
-        parse_ioepc,
+        "https://admission.ioepc.edu.np/notices/list",
+        parse_ioepc_admission,
+    ),
+    Source(
+        "chitwan",
+        "Chitwan Engineering Campus",
+        "https://admission.ioecc.edu.np/get-feed.php",
+        parse_admission_feed,
+        method="POST",
     ),
 ]
 
-# Thapathali (tcioe.edu.np) and Chitwan (cec.tu.edu.np) are deliberately absent.
-# Thapathali renders its notice list in the browser -- its served HTML contains no notice
-# at all -- so scraping it would need a headless browser, which is a dependency this does
-# not earn yet. Chitwan publishes no feed of its own and links to tu.edu.np, which is
-# already a source above.
+# Every campus now has a feed. The two that did not -- Thapathali, whose main site renders
+# its notice list in the browser, and Chitwan, which published nothing of its own -- both
+# turned out to have an admission portal that serves one directly, so the headless browser
+# the old note here called for is not needed after all.
 
 
 def _dedupe(notices: list[Notice]) -> list[Notice]:
@@ -226,11 +305,15 @@ def refresh() -> dict:
     with httpx.Client(
         timeout=TIMEOUT, follow_redirects=True, headers=headers
     ) as client:
-        for key, label, url, parser in SOURCES:
+        for source in SOURCES:
+            key, label, url = source.key, source.label, source.url
             try:
-                response = client.get(url)
+                if source.method == "POST":
+                    response = client.post(url, json={})
+                else:
+                    response = client.get(url)
                 response.raise_for_status()
-                found = _dedupe(parser(response.text, url))[:PER_SOURCE_LIMIT]
+                found = _dedupe(source.parser(response.text, url))[:PER_SOURCE_LIMIT]
                 for notice in found:
                     notice.source, notice.source_label = key, label
                     notice.bs_date, notice.bs_label = ad_to_bs_labels(notice.date)

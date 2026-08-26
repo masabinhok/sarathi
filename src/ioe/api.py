@@ -317,9 +317,18 @@ async def today() -> dict:
 
 
 @app.get("/api/notices")
-async def notices() -> dict:
-    """Cached notices scraped from IOE/TU/campus sites. Never scrapes on request."""
-    return notices_mod.load()
+async def notices(limit: int = 0) -> dict:
+    """Cached notices from the IOE boards and campus admission portals.
+
+    Never scrapes on request -- the feed is refreshed in the background by _freshen_notices
+    and by the admin route. limit trims the list for callers that show a handful, so the
+    rail stops paying for seven sources' worth of notices to render five of them; 0 means
+    the whole index, which is what /notices wants.
+    """
+    payload = notices_mod.load()
+    if limit > 0:
+        payload = {**payload, "notices": payload.get("notices", [])[:limit]}
+    return payload
 
 
 @app.get("/api/deadlines")

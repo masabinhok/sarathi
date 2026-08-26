@@ -191,7 +191,9 @@ async function getJSON<T>(path: string): Promise<T> {
 
 export const fetchHealth = () => getJSON<Health>("/api/health");
 export const fetchToday = () => getJSON<Today>("/api/today");
-export const fetchNotices = () => getJSON<NoticeFeed>("/api/notices");
+/** limit trims the feed server-side; omit it for the full index. */
+export const fetchNotices = (limit?: number) =>
+  getJSON<NoticeFeed>(`/api/notices${limit ? `?limit=${limit}` : ""}`);
 export const fetchDeadlines = () => getJSON<DeadlineFeed>("/api/deadlines");
 
 /** Admin calls carry the shared token; the caller holds it, it is never persisted here. */

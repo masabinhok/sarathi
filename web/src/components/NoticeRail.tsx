@@ -5,8 +5,16 @@ import { useEffect, useState } from "react";
 import Dateline from "@/components/Dateline";
 import { fetchNotices, type Notice } from "@/lib/api";
 
-/** How many fit in the right gutter without turning it into a second column. */
-const SHOWN = 5;
+// How many the rail holds. About five fit in the gutter before it reads as a second
+// column, so the rest are reachable by scrolling rather than by being fetched and
+// thrown away -- which is what this did when it sliced to five at fetch time, with
+// seven sources publishing twelve notices each behind it.
+const HELD = 15;
+
+// Roughly five rows. Set in rem against the row height rather than as a row count,
+// because a two-line Nepali headline makes rows uneven and a fixed count of them
+// would make the rail's height jump around with the news.
+const RAIL_HEIGHT = "26rem";
 
 /**
  * The notice index, as a newspaper prints one: no cards, no radius, no per-item
@@ -19,8 +27,8 @@ export default function NoticeRail() {
 
   useEffect(() => {
     let live = true;
-    fetchNotices()
-      .then((feed) => live && setNotices(feed.notices.slice(0, SHOWN)))
+    fetchNotices(HELD)
+      .then((feed) => live && setNotices(feed.notices))
       .catch(() => live && setNotices([]));
     return () => {
       live = false;
@@ -44,10 +52,13 @@ export default function NoticeRail() {
       ) : notices.length === 0 ? (
         <p className="text-faint py-4 text-[0.75rem] leading-relaxed">
           No notices collected yet. An administrator refreshes these from the
-          IOE, TU and campus sites.
+          IOE boards and the campus admission portals.
         </p>
       ) : (
-        <ul>
+        // pane carries the thin lapis scrollbar, overscroll-behavior: contain so the
+        // page does not scroll on once the rail bottoms out, and a stable gutter so
+        // nothing shifts when the bar appears.
+        <ul className="pane overflow-y-auto" style={{ maxHeight: RAIL_HEIGHT }}>
           {notices.map((notice, i) => (
             <li key={notice.url} className="border-rule border-b">
               <a

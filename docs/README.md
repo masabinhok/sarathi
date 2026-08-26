@@ -94,8 +94,12 @@ and a disagreement between the two is a `verify()` failure rather than a silent 
 
 ### `data/cutoffs.csv` — 2079–2082 first-list cutoffs
 
-The lowest merit rank actually admitted to a programme, per campus, per category, per
-year. `src/ioe/cutoffs.py` answers "what rank got in last time" from it, and
+The rank each programme's first admission list **closed at** — the last rank admitted,
+per campus, per category, per year. The source's own note is "a lower numerical entrance
+rank is better", so the figure is the largest number that still got a place, and a
+student is inside it when their number is smaller. The column is `closing_rank` for that
+reason; it was briefly `lowest_rank_admitted`, which reads as rank 1 and inverts the
+meaning. `src/ioe/cutoffs.py` answers "what rank got in last time" from it, and
 `notes/scrape_cutoffs.py` rebuilds it when a new year publishes.
 
 228 rows: four campuses (Pulchowk, Thapathali, Pashchimanchal, Purwanchal) × four years

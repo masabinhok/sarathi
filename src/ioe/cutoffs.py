@@ -54,7 +54,7 @@ def _rows() -> list[dict[str, str]]:
     if not CUTOFFS_CSV.exists():
         return []
     with CUTOFFS_CSV.open(encoding="utf-8", newline="") as fh:
-        return [row for row in csv.DictReader(fh) if row.get("lowest_rank_admitted")]
+        return [row for row in csv.DictReader(fh) if row.get("closing_rank")]
 
 
 @lru_cache(maxsize=1)
@@ -63,7 +63,7 @@ def _index() -> dict[tuple[str, str, str], dict[str, int]]:
     out: dict[tuple[str, str, str], dict[str, int]] = defaultdict(dict)
     for row in _rows():
         key = (row["campus"], row["programme"], row["category"])
-        out[key][row["year"]] = int(row["lowest_rank_admitted"])
+        out[key][row["year"]] = int(row["closing_rank"])
     return dict(out)
 
 
@@ -92,7 +92,7 @@ def _match(campus: str, programme: str, category: str) -> tuple[str, str, str] |
 
 
 def history(campus: str, programme: str, category: str = "Regular") -> dict[str, int]:
-    """{year: lowest rank admitted}, newest first, or {} if nothing is recorded."""
+    """{year: closing rank}, newest first, or {} if nothing is recorded."""
     key = _match(campus, programme, category)
     return dict(sorted(_index()[key].items(), reverse=True)) if key else {}
 
@@ -103,16 +103,73 @@ def cutoff(campus: str, programme: str, category: str = "Regular") -> int | None
     return recorded[next(iter(recorded))] if recorded else None
 
 
-def standing(rank: int, campus: str, programme: str, category: str = "Regular") -> str:
-    """Where a rank sits against the most recent cutoff, or "" when none is recorded."""
-    reached = cutoff(campus, programme, category)
-    if reached is None:
-        return ""
-    if rank <= reached * (1 - MARGIN):
-        return "inside"
-    if rank <= reached * (1 + MARGIN):
-        return "near"
-    return "beyond"
+def against_each_year(
+    rank: int, campus: str, programme: str, category: str = "Regular"
+) -> list[tuple[str, int, str]]:
+    """(year, closing rank, verdict) for every recorded year, newest first.
+
+    All four years rather than the newest one, and compared rather than averaged. A mean
+    of 724 and 1270 is a number no admission list ever produced, and it hides the thing a
+    student most needs to see -- that the figure moves, and by how much. Four verdicts
+    say "this held every year" or "this held once out of four", which is a real answer to
+    "what are my chances" without inventing a probability.
+    """
+    verdicts = []
+    for year, closed in history(campus, programme, category).items():
+        if rank <= closed * (1 - MARGIN):
+            verdict = "cleared"
+        elif rank <= closed * (1 + MARGIN):
+            verdict = "borderline"
+        else:
+            verdict = "missed"
+        verdicts.append((year, closed, verdict))
+    return verdicts
+
+
+# How the count of cleared years is put into words. Never a percentage and never a
+# promise: the count is a fact about four past lists, and the sentence says only that.
+CHANCE = {
+    4: "cleared in every one of the {total} recorded years -- the strongest signal this "
+    "data can give, though still not a promise",
+    3: "cleared in {cleared} of the {total} recorded years -- it held in most of them",
+    2: "cleared in {cleared} of the {total} recorded years -- genuinely borderline, it "
+    "went both ways",
+    1: "cleared in only {cleared} of the {total} recorded years -- it held once and "
+    "missed the rest",
+    0: "cleared in none of the {total} recorded years",
+}
+
+
+def chance_line(rank: int, verdicts: list[tuple[str, int, str]]) -> str:
+    """The one sentence that answers "what are my chances", counted not estimated."""
+    cleared = sum(1 for _, _, verdict in verdicts if verdict == "cleared")
+    borderline = sum(1 for _, _, verdict in verdicts if verdict == "borderline")
+    total = len(verdicts)
+    reading = CHANCE[min(cleared, 4)].format(cleared=cleared, total=total)
+    line = f"Rank {rank} would have {reading}."
+    if borderline:
+        line += (
+            f" A further {borderline} year(s) were within {int(MARGIN * 100)}% either "
+            "way, which is too close to call."
+        )
+    return line
+
+
+def sources_for(
+    campus: str, programme: str, category: str = "Regular"
+) -> dict[str, str]:
+    """year -> the official admission list behind that year's figure, newest first."""
+    wanted = (campus.casefold(), programme.casefold(), category.casefold())
+    found: dict[str, str] = {}
+    for row in _rows():
+        key = (
+            row["campus"].casefold(),
+            row["programme"].casefold(),
+            row["category"].casefold(),
+        )
+        if key == wanted and row.get("source_url"):
+            found[row["year"]] = row["source_url"]
+    return dict(sorted(found.items(), reverse=True))
 
 
 def source_for(campus: str, programme: str, category: str = "Regular") -> str:
@@ -192,7 +249,7 @@ SCOPE = (
 # a rank of 2000. So the comparison is spelled out rather than left to be derived.
 ORDINAL = (
     "A smaller rank number is better. A programme was within reach only if the student's "
-    "rank is a smaller number than, or equal to, the lowest rank it admitted."
+    "rank is a smaller number than, or equal to, the rank its list closed at."
 )
 
 CAVEAT = (
@@ -221,54 +278,59 @@ def is_cutoff_question(text: str) -> bool:
     return bool(_INTENT.search(text or ""))
 
 
-def reachable(rank: int, category: str = "Regular") -> list[tuple[str, str, int]]:
-    """(campus, programme, newest cutoff) that the newest recorded list reached at least
-    as deep as this rank, deepest margin first.
+def reachable(rank: int, category: str = "Regular") -> list[tuple[str, str, int, int]]:
+    """(campus, programme, years cleared, years recorded) that this rank ever cleared.
 
-    "What can I get with my rank" is the question students actually ask, and answering it
-    from a list of what each programme's list reached is the only honest form of it.
+    Sorted by how many years it held, most first. Ranking by a single year's figure would
+    put a programme that happened to be soft once above one that held every year, which is
+    the opposite of what a student choosing between them needs.
     """
-    out: list[tuple[str, str, int]] = []
+    out: list[tuple[str, str, int, int]] = []
     for (campus, programme, cat), by_year in _index().items():
         if cat.casefold() != category.casefold():
             continue
-        newest = max(by_year)
-        if by_year[newest] >= rank:
-            out.append((campus, programme, by_year[newest]))
-    return sorted(out, key=lambda row: row[2] - rank, reverse=True)
+        cleared = sum(1 for closed in by_year.values() if rank <= closed)
+        if cleared:
+            out.append((campus, programme, cleared, len(by_year)))
+    return sorted(out, key=lambda row: (-row[2], row[1], row[0]))
 
 
 def reachable_context(rank: int, category: str = "Regular") -> str:
-    """Every programme whose most recent first list reached this rank."""
-    newest = years()[0] if years() else "?"
+    """Every programme this rank cleared in at least one recorded year."""
+    span = ", ".join(years())
     options = reachable(rank, category)
     if not options:
         return (
-            f"[Cutoff history: nothing reached rank {rank} in {newest}]\n"
-            f"In {newest} no recorded {category} first list at any of the four covered "
-            f"campuses reached rank {rank}. Say that plainly. Say that later admission "
-            "lists reach considerably deeper than the first, that Full Fee seats reach "
-            "deeper than Regular ones, and that affiliated colleges are not covered here "
-            "at all -- so this is not the same as saying there is nothing available.\n"
-            + SCOPE
-            + "\n"
-            + ORDINAL
-            + "\n"
-            + CAVEAT
+            f"[Cutoff history: nothing reached rank {rank} in {span}]\n"
+            f"In none of the recorded years did any {category} first list at the four "
+            f"covered campuses reach rank {rank}. Say that plainly. Say too that later "
+            "admission lists reach considerably deeper than the first, that Full Fee "
+            "seats reach deeper than Regular ones, and that affiliated colleges are not "
+            "covered here at all -- so this is not the same as saying there is nothing "
+            "available.\n" + SCOPE + "\n" + ORDINAL + "\n" + CAVEAT
         )
-    width = max(len(programme) for _, programme, _ in options) + 2
-    lines = [
-        f"  {programme:<{width}}{campus:<16}{reached}"
-        for campus, programme, reached in options
-    ]
+    width = max(len(programme) for _, programme, _, _ in options) + 2
+    lines = "\n".join(
+        f"    {programme:<{width}}{campus:<16}cleared {cleared} of {total} years"
+        for campus, programme, cleared, total in options
+    )
+    held = [row for row in options if row[2] == row[3]]
+    strongest = (
+        "Strongest: "
+        + ", ".join(f"{programme} at {campus}" for campus, programme, _, _ in held[:6])
+        + f" -- cleared in all {options[0][3]} recorded years."
+        if held
+        else "None of these cleared in every recorded year."
+    )
     return (
-        f"[Cutoff history: what rank {rank} would have cleared in {newest}]\n"
-        f"{category} programmes whose {newest} FIRST admission list reached at least as "
-        f"deep as rank {rank}, with the lowest rank each admitted:\n"
-        f"  {'Programme':<{width}}{'Campus':<16}{newest} cutoff\n"
-        + "\n".join(lines)
-        + "\n"
-        "List these as what happened in that year, not as what the student will get.\n"
+        f"[Cutoff history: what rank {rank} would have cleared, {span}]\n"
+        f"Each {category} programme is compared against all {len(years())} recorded "
+        f"years, not averaged across them -- a cutoff moves, and how often it held is "
+        f"the honest answer to what a rank is worth:\n"
+        f"{lines}\n"
+        f"{strongest}\n"
+        "Give this as what happened in those years and how consistently, never as what "
+        "the student will get. Nobody can guarantee a place.\n"
         + SCOPE
         + "\n"
         + ORDINAL
@@ -306,7 +368,7 @@ def history_context(campus: str, programme: str, category: str = "Regular") -> s
     source = source_for(campus, programme, category)
     return (
         f"[Cutoff history: {programme} ({category}) at {campus} Campus]\n"
-        f"Lowest rank admitted in the first list, by year:\n  {_trend(recorded)}\n"
+        f"Closing rank of the first list -- the last rank admitted -- by year:\n  {_trend(recorded)}\n"
         + (f"Published list this comes from: {source}\n" if source else "")
         + SCOPE
         + "\n"
@@ -342,30 +404,38 @@ def cutoff_context(
             "cutoff, or the seat count.\n" + SCOPE
         )
 
-    newest = next(iter(recorded))
-    where = standing(rank, campus, programme, category)
-    source = source_for(campus, programme, category)
-    reading = {
-        "inside": (
-            f"clear of the {newest} cutoff -- in that year a rank like this was admitted "
-            "in the first list"
-        ),
-        "near": (
-            f"close to the {newest} cutoff, within {int(MARGIN * 100)}% either way -- too "
-            "close to call, and the kind of gap a later list can close"
-        ),
-        "beyond": (
-            f"past the {newest} first-list cutoff -- in that year the first list did not "
-            "reach this far, though later lists reach deeper"
-        ),
-    }[where]
+    verdicts = against_each_year(rank, campus, programme, category)
+    cited = sources_for(campus, programme, category)
+    said = {
+        "cleared": "would have cleared it -- the list reached past this rank",
+        "borderline": f"was within {int(MARGIN * 100)}% of it -- too close to call",
+        "missed": "would have been past it -- the list stopped short of this rank",
+    }
+    # The verdict is welded to every line rather than left to be derived from the two
+    # numbers beside it. See priority.format_rank_guidance: handed a bare closing rank of
+    # 55 and a student rank of 2000, the model read 55 as the larger of the two.
+    lines = "\n".join(
+        f"    {year}: closed at {closed:<6} rank {rank} {said[verdict]}"
+        for year, closed, verdict in verdicts
+    )
 
     return (
         f"[Cutoff history: {programme} ({category}) at {campus} Campus]\n"
-        f"Lowest rank admitted in the first list, by year:\n  {_trend(recorded)}\n"
         f"The student's rank: {rank}\n"
-        f"Reading: {rank} is {reading}.\n"
-        + (f"Published list this comes from: {source}\n" if source else "")
+        f"Each recorded year's first admission list, and where {rank} sits against it:\n"
+        f"{lines}\n"
+        f"{chance_line(rank, verdicts)}\n"
+        "Give this as the reading: say how many of the years it would have cleared and "
+        "name them. That is a description of what happened, not a prediction. Say plainly "
+        "that nobody can guarantee a place, because the pool and the seat count change "
+        "every year.\n"
+        + (
+            "Published list each year's figure comes from:\n"
+            + "\n".join(f"    {year}: {url}" for year, url in cited.items())
+            + "\n"
+            if cited
+            else ""
+        )
         + SCOPE
         + "\n"
         + ORDINAL

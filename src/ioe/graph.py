@@ -384,9 +384,15 @@ def enforce_floor(blocks: dict[str, str], state: ChatState) -> dict[str, str]:
     # Emptied rather than deleted, because `blocks` reduces with merge_blocks and a
     # dropped key is simply re-supplied from the accumulated state on the next merge.
     # render_blocks and the eval's evidence() both read an empty string as absent.
-    if blocks.get("chances"):
-        blocks["cutoffs"] = ""
-
+    # Both blocks now stand together, and they answer different questions: `chances` is
+    # this year's actual allocation at Pulchowk, `cutoffs` is how the same programme's
+    # closing rank moved across four published years. A student choosing wants both.
+    #
+    # They did not always coexist. With the cutoff history written as one line of four
+    # year:rank pairs, the model pulled a 2082 figure into an answer about the 2083
+    # simulation, and `cutoffs` was cleared whenever `chances` was present. Rewriting the
+    # history as one labelled line per year -- with the verdict welded to each -- removed
+    # the conflation, measured, so the suppression is gone rather than kept as a charm.
     # A rank sitting in a prompt beside a seat count, with no cutoff block to say what a
     # rank actually reached, is the exact confusion SYSTEM_PROMPT has a rule against. If
     # the detector says this is a chances question, the cutoff figures are in the prompt

@@ -162,13 +162,13 @@ CASES: list[tuple[str, str, set[str], set[str]]] = [
     # must not drag in the stranger who actually holds that rank -- which is the hazard
     # results.lookup_context's skip_ranks was added for.
     ("cutoffs", "i got rank 660, what can i study", {CUTOFFS}, {LOOKUP, DECLINED}),
-    # Written when cutoffs was the only answer to this. It names Pulchowk, so the
-    # allocation supersedes the published history -- the expectation moved, not the code.
+    # Names Pulchowk, so the allocation answers it; the four-year cutoff history now
+    # stands alongside rather than being suppressed, so it is no longer asserted absent.
     (
         "cutoffs",
         "is rank 340 enough for computer engineering at pulchowk",
         {CHANCES},
-        {CUTOFFS, LOOKUP, DECLINED},
+        {LOOKUP, DECLINED},
     ),
     ("cutoffs", "what was the cutoff for civil at thapathali", {CUTOFFS}, {DECLINED}),
     ("cutoffs", "can i get mechanical with my rank", {CUTOFFS}, {DECLINED}),
@@ -183,10 +183,10 @@ CASES: list[tuple[str, str, set[str], set[str]]] = [
         "chances",
         "my rank is 500, what should i put as my first priority at pulchowk",
         {CHANCES},
-        {CUTOFFS, DECLINED},
+        {DECLINED},
     ),
-    ("chances", "i am rank 2000, can i get computer at pulchowk", {CHANCES}, {CUTOFFS}),
-    ("chances", "rank 40, which programmes can i get", {CHANCES}, {CUTOFFS, DECLINED}),
+    ("chances", "i am rank 2000, can i get computer at pulchowk", {CHANCES}, set()),
+    ("chances", "rank 40, which programmes can i get", {CHANCES}, {DECLINED}),
     (
         "chances",
         "i got rank 300, what can i get at thapathali",

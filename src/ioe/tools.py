@@ -31,7 +31,7 @@ from langchain_core.tools import InjectedToolCallId, tool
 from langgraph.prebuilt import InjectedState
 from langgraph.types import Command
 
-from ioe import fees, notices, priority, results, seats
+from ioe import cutoffs, fees, notices, priority, results, seats
 from ioe.dates import annotate_dates
 from ioe.rag import (
     MIN_RELEVANCE,
@@ -177,8 +177,11 @@ def lookup_result(
 
     Do not pass the form number or rank yourself -- this reads the student's own message.
     """
-    asked = state.get("raw_question") or ""
-    block = results.lookup_context(asked)
+    asked = (state or {}).get("raw_question") or ""
+    # A rank inside a chances question belongs to the student and is hypothetical.
+    # Looking it up would attach a stranger's name and district to it -- see
+    # results.lookup_context's skip_ranks, which exists for exactly this.
+    block = results.lookup_context(asked, skip_ranks=cutoffs.is_cutoff_question(asked))
     if not block:
         return _done(
             tool_call_id,
@@ -266,6 +269,69 @@ def priority_rules(
 
 
 @tool
+def cutoff_standing(
+    campus: str = "",
+    programme: str = "",
+    category: str | None = None,
+    state: Annotated[dict | None, InjectedState] = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = "",
+) -> Command:
+    """What entrance rank actually got into a programme in previous years, and where a
+    student's own rank would have stood against it.
+
+    Use this whenever a student gives their rank and asks what they can get, whether a
+    rank is enough for a programme or campus, what a cutoff or closing rank was, or how
+    their chances look. Leave programme empty for "what can I get with my rank".
+
+    Covers the four campuses that publish comparable figures -- Pulchowk, Thapathali,
+    Pashchimanchal and Purwanchal -- for open/general category, first admission list only.
+    """
+    raw = (state or {}).get("raw_question") or ""
+
+    # The rank is read from the student's own words, never from an argument. A model that
+    # can pass a rank can invent one, and here that would be a fabricated number sitting
+    # next to real cutoffs -- the one place in this app where that is worst.
+    ranks = results.find_ranks(raw, include_topper=False)
+    kind = _category(category) or "Regular"
+    if kind not in cutoffs.CATEGORIES:
+        # Sponsored and foreign seats are allocated separately and no cutoff exists for
+        # them; falling back to Regular silently would answer a different question.
+        kind = "Regular"
+
+    named = seats.find_programmes(raw) or ([programme] if programme else [])
+    where = seats.find_campuses(raw) or ([campus] if campus else [])
+    places = where or list(cutoffs.covered_campuses())
+
+    if named:
+        # A named programme can be answered either way: with the student's rank if they
+        # gave one, and as a plain history if they did not. "What was the cutoff for
+        # Civil at Thapathali" does not need their rank and should not be asked for it.
+        parts = [
+            cutoffs.cutoff_context(ranks[0], place, named[0], kind)
+            if ranks
+            else cutoffs.history_context(place, named[0], kind)
+            for place in places
+        ]
+        block = "\n\n".join(part for part in parts if part)
+        if not block:
+            block = cutoffs.cutoff_context(
+                ranks[0] if ranks else 0, places[0], named[0], kind
+            )
+    elif ranks:
+        block = cutoffs.reachable_context(ranks[0], kind)
+    else:
+        block = (
+            "[Cutoff history: no rank and no programme given]\n"
+            "The student is asking about their chances without saying their entrance "
+            "rank or naming a programme. Ask for whichever is missing, in one sentence. "
+            "Do not estimate, and do not answer from the number of seats -- a seat count "
+            "says how many students a campus takes, not how far down the merit list it "
+            "reached."
+        )
+    return _done(tool_call_id, "Cutoff history assembled.", blocks={"cutoffs": block})
+
+
+@tool
 def convert_bs_date(
     bs_date: str = "",
     tool_call_id: Annotated[str, InjectedToolCallId] = "",
@@ -303,6 +369,7 @@ TOOLS = [
     fee_totals,
     seat_counts,
     priority_rules,
+    cutoff_standing,
     convert_bs_date,
     latest_notices,
 ]

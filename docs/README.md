@@ -77,27 +77,36 @@ uv run ioe-index
 
 Nothing is picked up until that runs.
 
-### `data/cutoffs.csv` — empty on purpose
+### `data/cutoffs.csv` — 2079–2082 first-list cutoffs
 
 The lowest merit rank actually admitted to a programme, per campus, per category, per
-admission list. `src/ioe/cutoffs.py` answers "what rank got in last time" from it, and
-while the file holds only its header it says there is no data rather than estimating.
+year. `src/ioe/cutoffs.py` answers "what rank got in last time" from it, and
+`notes/scrape_cutoffs.py` rebuilds it when a new year publishes.
 
-Nothing in this repository can stand in for it. The pass list in
-`03_BE_BArch_Entrance_Result_2083_pass_list.csv` carries form number, rank, name,
-gender and district — and no programme or campus column, so it cannot say what anyone
-applied for or where. The booklet gives seat counts, which say how many students a
-campus takes, not how far down the merit list it reached.
+228 rows: four campuses (Pulchowk, Thapathali, Pashchimanchal, Purwanchal) × four years
+× the programmes each ran, split Regular and Full-fee. **Open/general category and first
+admission list only.** `cutoffs.py` states every one of those limits in the block it
+builds, because a student reading their rank against the wrong category is exactly the
+mistake this data makes possible.
 
-The figures do exist, published, and filling this file is transcription work of the same
-kind the pass list already took:
+`source_url` is the **official campus admission list** each figure derives from, not the
+aggregator the scrape reads. Some Purwanchal rows have no link and carry an empty
+`source_url`: an empty cell is a known gap, and a wrong citation is a student sent to the
+wrong document.
 
-| What | Where |
-| --- | --- |
-| First Phase Applicant Priority List, 2083/05/03 | `pcampus.edu.np/2026/08/19/be-barch-admission-2083-first-phase-applicant-priority-list-and-priority-correction-notice/` |
-| First Admission List, 2083/05/06 | `pcampus.edu.np/2026/08/22/be-barch-admission-2083-first-admission-list/` |
-| Revised First Admission List, 2083/05/07 | `pcampus.edu.np/2026/08/23/be-barch-admission-2083-revised-first-admission-list/` |
-| Pashchimanchal First Admission List, 2083/05/06 | `wrc.edu.np/6404` |
+`cutoffs.verify()` cross-checks the file rather than trusting it. Every programme with a
+cutoff must have seats at that campus in `seats.py` — transcribed from the booklet by a
+completely different route — and every Full-fee cutoff must sit deeper than its Regular
+counterpart, because a Regular seat is cheaper for the same degree and fills first. Both
+hold across all 228 rows.
 
-Those are this year's lists, which makes them better evidence than the previous-year
-cutoffs the request was framed around — they describe the cycle the student is in.
+**Not covered, and not derivable from anything else here.** Chitwan publishes no
+comparable figures. No affiliated college is covered. Reserved-quota competition is a
+different pool entirely. And the pass list in
+`03_BE_BArch_Entrance_Result_2083_pass_list.csv` cannot stand in for any of it: it carries
+form number, rank, name, gender and district and **no programme or campus column**, so it
+cannot say what anyone applied for or where.
+
+For the current year, `src/ioe/priority.py` reaches further where it can: it simulates the
+actual allocation over the published priority applications rather than reading last year's
+outcome.

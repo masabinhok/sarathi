@@ -54,7 +54,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import REMOVE_ALL_MESSAGES, MessagesState, add_messages
 from langgraph.prebuilt import ToolNode
 
-from ioe import fees, results, seats
+from ioe import cutoffs, fees, results, seats
 from ioe.dates import annotate_dates, today_context
 from ioe.fees import FEE_SOURCE
 from ioe.language import (
@@ -228,7 +228,11 @@ def ensure_default_calls(calls: list[dict], state: ChatState) -> list[dict]:
 
     if "search_documents" not in named:
         out.append(_call("search_documents", {"query": english}, len(out)))
-    if "lookup_result" not in named and results.lookup_context(raw):
+    # skip_ranks because a rank inside a chances question is the student's own, stated
+    # hypothetically. Looking it up answers a question nobody asked, with an unrelated
+    # candidate's name and district, next to real cutoff figures.
+    chances = cutoffs.is_cutoff_question(raw) or cutoffs.is_cutoff_question(english)
+    if "lookup_result" not in named and results.lookup_context(raw, skip_ranks=chances):
         out.append(
             _call(
                 "lookup_result", {"reason": "the message names a candidate"}, len(out)
@@ -242,6 +246,10 @@ def ensure_default_calls(calls: list[dict], state: ChatState) -> list[dict]:
         seats.is_seat_question(raw) or seats.is_seat_question(english)
     ):
         out.append(_call("seat_counts", {"campus": "", "programme": ""}, len(out)))
+    if "cutoff_standing" not in named and (
+        cutoffs.is_cutoff_question(raw) or cutoffs.is_cutoff_question(english)
+    ):
+        out.append(_call("cutoff_standing", {"campus": "", "programme": ""}, len(out)))
     return out
 
 
@@ -332,7 +340,9 @@ def enforce_floor(blocks: dict[str, str], state: ChatState) -> dict[str, str]:
             blocks["fees"] = recovered
 
     if not blocks.get("lookup"):
-        recovered = results.lookup_context(raw)
+        recovered = results.lookup_context(
+            raw, skip_ranks=cutoffs.is_cutoff_question(raw)
+        )
         if recovered:
             blocks["lookup"] = recovered
 
@@ -342,6 +352,29 @@ def enforce_floor(blocks: dict[str, str], state: ChatState) -> dict[str, str]:
         recovered = seats.seat_context(raw) or seats.seat_context(english)
         if recovered:
             blocks["seats"] = recovered
+
+    # A rank sitting in a prompt beside a seat count, with no cutoff block to say what a
+    # rank actually reached, is the exact confusion SYSTEM_PROMPT has a rule against. If
+    # the detector says this is a chances question, the cutoff figures are in the prompt
+    # whatever the planner did.
+    if not blocks.get("cutoffs") and (
+        cutoffs.is_cutoff_question(raw) or cutoffs.is_cutoff_question(english)
+    ):
+        ranks = results.find_ranks(raw, include_topper=False)
+        programmes = seats.find_programmes(raw)
+        places = seats.find_campuses(raw) or cutoffs.covered_campuses()
+        if programmes:
+            parts = [
+                cutoffs.cutoff_context(ranks[0], place, programmes[0])
+                if ranks
+                else cutoffs.history_context(place, programmes[0])
+                for place in places
+            ]
+            recovered = "\n\n".join(part for part in parts if part)
+            if recovered:
+                blocks["cutoffs"] = recovered
+        elif ranks:
+            blocks["cutoffs"] = cutoffs.reachable_context(ranks[0])
 
     return blocks
 

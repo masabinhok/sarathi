@@ -35,6 +35,7 @@ LOOKUP = "lookup"
 FEES = "fees"
 SEATS = "seats"
 PRIORITY = "priority"
+CUTOFFS = "cutoffs"
 NOTICES = "notices"
 # Two different things, and collapsing them cost a false failure.
 #
@@ -155,6 +156,22 @@ CASES: list[tuple[str, str, set[str], set[str]]] = [
     ("scope", "what is the women's quota", {DOCUMENTS}, {DECLINED}),
     ("scope", "which campus is best for civil", {DOCUMENTS}, {DECLINED}),
     ("scope", "when do applications close", {DOCUMENTS}, {DECLINED}),
+    # ── Cutoffs. Issue 30. The last two matter most: a bare rank question is a pass-list
+    # lookup and must not drag in four years of cutoff history, and a chances question
+    # must not drag in the stranger who actually holds that rank -- which is the hazard
+    # results.lookup_context's skip_ranks was added for.
+    ("cutoffs", "i got rank 660, what can i study", {CUTOFFS}, {LOOKUP, DECLINED}),
+    (
+        "cutoffs",
+        "is rank 340 enough for computer engineering at pulchowk",
+        {CUTOFFS},
+        {LOOKUP, DECLINED},
+    ),
+    ("cutoffs", "what was the cutoff for civil at thapathali", {CUTOFFS}, {DECLINED}),
+    ("cutoffs", "can i get mechanical with my rank", {CUTOFFS}, {DECLINED}),
+    ("cutoffs", "what is the closing rank for architecture", {CUTOFFS}, {DECLINED}),
+    ("cutoffs", "who is rank 340", {LOOKUP}, {CUTOFFS, DECLINED}),
+    ("cutoffs", "did form 2083-4001 pass", {LOOKUP}, {CUTOFFS, DECLINED}),
 ]
 
 # ── Conversations ─────────────────────────────────────────────────────────────

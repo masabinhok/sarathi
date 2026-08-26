@@ -21,7 +21,7 @@ are the PDF's, which reconcile completely.
 
 The numbers here are admission targets: how many students an institution takes. They are
 not a rank threshold, and nothing in this module will tell a student whether their rank
-reaches one. See `docs/data/cutoffs.csv` for that, and for why it is empty.
+reaches one. `cutoffs.py` holds that, from the published first admission lists.
 """
 
 import re

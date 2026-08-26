@@ -11,7 +11,7 @@ the open list and take the next free number.
 | `BUILT` | A question that turned into a feature; the decision record is kept with it. |
 | `SATISFIED` | Good enough; not being chased further. |
 
-### Open — 6
+### Open — 4
 
 | # | Issue | Area |
 | --- | --- | --- |
@@ -19,10 +19,8 @@ the open list and take the next free number.
 | [8](#8--rethink-the-apps-scope) | Rethink the app's scope | product |
 | [9](#9--guide-the-bot-to-answer-smartly) | Guide the bot to answer smartly | prompt / graph |
 | [10](#10--play-with-the-bot-and-fix-what-breaks) | Play with the bot and fix what breaks | prompt / graph |
-| [24](#24-answering-scope) | Answering scope | prompt / graph |
-| [26](#26-my-query) | Simplify onto a tool-calling agent | architecture |
 
-### Closed — 21
+### Closed — 28
 
 | # | Issue | Status |
 | --- | --- | --- |
@@ -47,6 +45,13 @@ the open list and take the next free number.
 | [22](#22--fixed--it-answers-questions-outside-its-scope-and-then-loses-the-thread) | It answers questions outside its scope, and then loses the thread | `FIXED` |
 | [23](#23--fixed--it-gets-the-fee-arithmetic-wrong) | It gets the fee arithmetic wrong | `FIXED` |
 | [27](#27--fixed--the-model-never-saw-its-own-system-prompt) | The model never saw its own system prompt | `FIXED` |
+| [24](#24--satisfied--answering-scope) | Answering scope | `SATISFIED` |
+| [26](#26--built--simplify-onto-a-tool-calling-agent) | Simplify onto a tool-calling agent | `BUILT` |
+| [28](#28--fixed--notices-from-every-campus-and-none-from-tu) | Notices from every campus, and none from TU | `FIXED` |
+| [29](#29--built--an-ingestion-pipeline-for-fresh-notices) | An ingestion pipeline for fresh notices | `BUILT` |
+| [30](#30--fixed--cutoff-ranks-from-the-published-lists) | Cutoff ranks from the published lists | `FIXED` |
+| [31](#31--built--seat-chances-from-the-priority-list) | Seat chances from the priority list | `BUILT` |
+| [32](#32--fixed--better-starting-questions) | Better starting questions | `FIXED` |
 
 ---
 
@@ -553,7 +558,9 @@ as follow-ups, and `and what other cateogry i could study in` still answers from
 instead of saying the documents do not cover it. Those are the guard and the missing
 "no evidence" path, and they are the branch's job, not this fix's.
 
-## 24. answering scope
+## 24 · `SATISFIED` · Answering scope
+
+*The report, verbatim:*
 
 ```
 You asked
@@ -652,6 +659,41 @@ I only handle questions about IOE admissions and the IOE entrance exam, so I hav
 ```
 look at the above convo, first it answered wronlgy that ioe teaches all those, i guess TU teaches it. next it still rejects the foreign? because its out of scope it has not continuation context. i think we should not refuse anything, we should restructure the prompt from scratch: strcitly answer in english. strictly answer questions grounded in docuemnts provided, to any context as much as possible, have continuation context, and only refuse if no docuemnts could answer the relecant txt based on conversation context. we should apply short term memory, long term memoery concepts. and feed back the summary of the convo, is the context window is having some issues. also the system prompts are too long and are so ineffective. we should optimize them to make the bot robust
 
+**Resolved on `tool-calling`, merged in `53f1841`.** Four things were reported and three
+are fixed.
+
+The hallucination and the truncation were one cause, and it was not the prompts being
+long — see `27`. `num_ctx` was unset, Ollama served 4,096 tokens, and a 5,318-token first
+turn was silently cut from the front, which is where `SYSTEM_PROMPT` sits. Fixed on `main`
+first, alone, in `52047d9`.
+
+The refusals are gone. The broad scope classifier that turned away `foreign?` and
+`what is its source` is deleted, along with `SCOPE_PROMPT`, `is_in_scope`, `best_match`,
+`guard`, `refuse` and `route_scope` — one model call and one embedding call per turn.
+What replaces it is narrower by construction: a task-substitution detector in `scope.py`
+that fires on `write me a python function` and stays silent on all 65 questions in the
+suite, and an `uncovered` block that tells the model the evidence is empty instead of
+letting it improvise. **The refusal turn now stays in the transcript**, which is the whole
+difference from the guard: a student who asks something off-topic and returns to their
+real question is not starting again.
+
+The continuity is fixed. Three raw turns plus a rolling summary, `memory.py`. `foreign?`
+and `what is its source` both resolve in context now, and both are eval cases.
+
+The prompts are shorter because most of what they carried was conditional. 2,131 tokens
+to 539, with the nine bullets on reading a pass list and the six on dates moved onto the
+blocks they govern, where they are absent unless the block is.
+
+**What is not fixed, and why it is `SATISFIED` rather than `FIXED`.** One of this issue's
+own turns still fails: `and what other cateogry i could study in` answers from retrieval
+instead of saying the documents do not cover it. That is the weak-evidence gap `22`
+already recorded, and it was measured again rather than assumed. Off-topic questions score
+0.357–0.576 against the corpus and genuine ones score 0.562–0.701 — **the distributions
+overlap**, and the worst off-topic ("how do i apply to Kathmandu University", 0.576)
+outscores two real questions. No threshold separates them, so neither raising
+`MIN_RELEVANCE` nor triggering `uncovered` on a best score can work. It needs a different
+mechanism, and shipping at 63/65 with the gap documented was the call taken.
+
 ## 25 · `BUILT` · Supervisor queries
 he wants to add feature of seat probability based on rank, previous year cutoff marks. current priority list scanning and then estimating probability of getting the subject chosen based on number of seats available, same sub chosen by higher rankers(1 being the highgest)
 ioe booklet feeding, seat details of all affiliated campusses and the courses offered.
@@ -700,7 +742,9 @@ historical framing only.
   rather than modelled separately, so an open-category cutoff is approximate — good enough
   for guidance, not to be published as an exact figure.
 
-## 26. my query
+## 26 · `BUILT` · Simplify onto a tool-calling agent
+
+*The question, verbatim:*
 i think the app has become quite complex with a lot of iterative additions. could not the same functionality achieved through simple patterns/code. how about we shift to langgraph chatbot with tool calling only when necessary with rag as a tool, you can oppose with strict facts and why not. but i want to simplify the codebase, optimize. is gemma a better model? how about we test the tool calling abitlity of local models. i guess, our chatbot using suitable tools like date tool, result_lookup tool, fee_Calc_tool, priority_rank_tool. and many others, and use only when necessary otherwise go through a normal ragbot loop. 
 also, we should directly give a strict prompt of do not ever answer in any other languages other than english. alwasy answer in english. isnt this prompt enought to stop the bot from answering in other languages. 
 and also enforce the incoversation context more, through summarization. instead of refusing to answer query unrelated to ioe, it should try to answer every query being releavent to ioe, like if somnething doesnot match any docuemtn semantically, no ioe doesnot offer that, or include that. kind of asnwer crafted by the llm based on strcutured output. 
@@ -709,7 +753,300 @@ let's work on a different branch leave the main branch as it is, and experiment 
 
 
 
-## new issues: 
+**Built on `tool-calling`, merged in `53f1841`.** `graph.py` went from 703 lines to 486,
+five model calls per turn to two, and the pipeline is now a planner that chooses tools
+plus an answering model that never sees one.
+
+**Where the answer was yes.** Tool calling works on `qwen2.5:7b` — an 8-case probe scored
+7/8, and the miss was `what about foreign students?` with no history, which is the case
+STM exists to fix. Nine tools now. STM, LTM and summarisation all shipped. The codebase is
+smaller.
+
+**Where the answer was no, with the measurement.**
+
+*Gemma.* `gemma3` advertises `vision` and not `tools`. Switching to it deletes the
+capability this whole issue is built on. Staying on `qwen2.5:7b`.
+
+*"Isn't a strict English prompt enough?"* No. `19` already records four rounds of that
+failing, and it was retested: the strip-and-translate layer stays. Naming the request in
+the prompt is part of what keeps it alive.
+
+*"Don't refuse anything, just answer in character."* Also no, measured. Given a short
+scope prompt and asked for a Python function, the model replied *"This is outside what I
+cover, but here's a simple Python function…"* and wrote it. Asked France's capital it said
+*"not related to IOE"* and answered *"Paris"*. The deflection gets said and then ignored,
+so it has to be deterministic — hence the narrow detector rather than a prompt rule.
+
+*`create_react_agent`.* Deprecated in the installed langgraph 1.2.11 in favour of
+`langchain.agents.create_agent`, and the `langchain` umbrella package is not installed.
+More importantly `ChatOllama.bind_tools(..., tool_choice=...)` carries `# noqa: ARG002` —
+**the argument is ignored**, so a tool call cannot be forced, so "retrieval always runs"
+cannot be expressed inside the prebuilt loop. The graph is hand-built.
+
+**The decision that everything else hangs off.** Tools are a *selection* mechanism; their
+results are re-rendered by the app as ordered prompt blocks. Tool calls and `ToolMessage`s
+live in a `scratch` channel the answering model never sees, and `BLOCK_ORDER` decides
+placement. Model-chosen evidence, app-controlled placement — which matters because every
+placement lesson here was expensive, and tool results ordered by call order is placement
+chosen by a 7B model.
+
+Underneath it is a deterministic floor: `ensure_default_calls` makes the model's tool
+selection **additive only**, and `enforce_floor` puts back any block the detectors called
+for that the tools did not deliver. Total tool-selection failure degrades to exactly the
+old pipeline. That floor is not decoration — it was added after a regression took the
+suite from 49/53 to 44/53 because the planner emitted `category: "full_fee"` against a
+`Literal` enum, the call failed schema validation, and nine cases lost their fee figures
+while every other tool in the batch succeeded. Every tool argument is optional now.
+
+## 28 · `FIXED` · Notices from every campus, and none from TU
+
+> i think we should fetch notices from all the constituent campuses, and IOE, not from TU
+> — `entrance.ioe.edu.np`, `admission.ioe.edu.np/be/2083/`, `admission.tcioe.edu.np/be/2083/`,
+> `admission.ioecc.edu.np`, `pcampus.edu.np/category/admission-notices/`,
+> `admission.ioepc.edu.np/notices/list`, `ioepas.edu.np/category/news-notices/admission-notice`.
+> only fetch from these sites, for sites not specific to admission fetch from the admission
+> category only. Also can we page the notices, or make it scrollable — a friendly ux.
+
+Done in `74c5f6b`. Seven sources, all admission and entrance. Tribhuvan University's two
+general feeds are deleted: with `PER_SOURCE_LIMIT = 12` they were competing for the six
+slots in the digest against the campus that actually publishes the admission list.
+
+**The note in `notices.py` saying two campuses were unreachable was out of date.** It
+recorded that Thapathali renders its notice list in the browser and Chitwan publishes no
+feed of its own. Both now have an admission portal that serves one directly, and none of
+the seven needs a headless browser:
+
+| Source | How |
+| --- | --- |
+| `admission.ioe.edu.np` | htmx fragment, `GET /be/2083/public/get-notices` |
+| `admission.tcioe.edu.np`, `admission.ioecc.edu.np` | JSON, **`POST get-feed.php`** |
+| the other four | server-rendered HTML |
+
+Two things that would have failed quietly. The JSON feeds answer a GET with
+`{"Error":"Only POST method is allowed"}` **and a 200 status**, so a GET parses to zero
+notices and reads as a campus that has published nothing; `Source` grew a `method` field.
+And the htmx rows carry `href="#"` with the real path inside an `onclick` argument, so a
+row whose path cannot be read is skipped rather than published as a link to nowhere.
+
+**The bug worth naming.** `_MONTHS` held full month names and the three portals write
+`Mon, 24 Aug 2026`. Every notice from them parsed with a title, a URL and **no date** —
+and undated notices sort last, so they were buried rather than visibly broken.
+`_month_number` resolves prefixes, but only when exactly one month matches, so `"Ju"`
+stays unknown rather than silently becoming June.
+
+**UX.** `/notices` pages at 20. The rail was slicing to five *at fetch time*, so it
+downloaded seven sources' worth of notices to render five and discarded the rest; it now
+asks for fifteen through a new `?limit=` and scrolls them in the existing `.pane`
+scrollport — 20.0 KB to 6.1 KB on that call. `SOURCE_ORDER` in `Notices.tsx` had its own
+comment warning it must track `SOURCES`; left alone it would have silently dropped the
+filter chip for every new campus.
+
+Verified live against all seven: 64 notices, no source in error, zero undated, every
+constituent campus represented for the first time.
+
+## 29 · `BUILT` · An ingestion pipeline for fresh notices
+
+> is there anyway, we can build an ongoing ocr pipeline on the notices that are coming
+> freshly from these sites and ingest to our current model, so that it has the ability to
+> answer on latest docs. ofcourse we will inject the ability/tools to calculate priority,
+> fees, rank, everything related that's evergreen, feeding on latest data.
+
+Built in `6a2983f`, and **it is not an OCR pipeline**, because it does not need to be.
+
+Measured before anything was written: of the fifteen source PDFs, **thirteen carry a real
+text layer** and only `04_Payment_Notice.pdf` is a true scan. So this is `pdftotext` and
+one 400 KB apt package, not tesseract plus a Nepali language pack plus a vision model
+competing with `qwen2.5:7b` for an 8.19 GB card. `-layout` is load-bearing rather than
+cosmetic: it reproduced a published applicant table row for row identical to the CSV that
+had been transcribed from it by hand.
+
+**The hard part was that Nepali prose extracts two ways and one of them is silent
+garbage.** Some PDFs give real Unicode. Others were typeset in Preeti, a legacy font that
+maps Devanagari glyphs onto ASCII bytes, and those come out as text that looks like text,
+raises no error, and means nothing: `OlGhlgol/Ë cWoog ;+:yfg` is इन्जिनियरिङ अध्ययन संस्थान.
+`docs/translated/13_..._English.md` says of its own source *"this is a scanned PDF with no
+text layer"* — it has 14,827 characters of one. It read as rubble, so somebody retyped
+seven pages.
+
+So there is a decoder, with the two ordering rules a typing layout implies: ि is typed
+before its cluster and rendered after, र् is typed after and rendered before. Validated
+against a hand transcription — `@)*#÷)$÷@&` is 2083/04/27, the date the translated
+document records — and against seventeen corpus words, all seventeen exact. Long prose is
+close but not perfect (विश्वविब्ालय for विश्वविद्यालय), which is what the review queue is for.
+
+Three decisions worth keeping:
+
+- **Per line, not per document or per word.** A whole-document decode mangles the English
+  table bodies that are the most valuable thing in these files. A per-word rule cannot
+  tell `nflu` (लागि) from `Male`. These documents put Nepali prose and English table rows
+  on different lines and essentially never on the same one.
+- **The threshold is a judgement, not a gap in the data.** The density distribution is
+  continuous — about 360 lines between 0.05 and 0.15. An attempt to sharpen it by looking
+  for English words failed, measured: `OlGhlgol`, `cWoog` and `cGtu` all contain ASCII
+  vowels, so a vowel test calls इन्जिनियरिङ अध्ययन संस्थान English. Erring high is the safer
+  error, because rubble is visible to a reviewer and confident mistranslation is not.
+- **Nothing reaches the index.** Extraction writes to `.cache/pending/` and stops.
+  Approving is a person, in `/admin`; only that writes `docs/notices/*.md`. Preeti
+  extractions are flagged in the list and carry a warning in the file, because a wrong
+  digit decoded from a legacy font looks exactly like a right one. `docs/README.md` says
+  the failure mode that matters here is numeric drift, and machine extraction does not
+  change that — it changes what a reviewer starts from.
+
+Harvest is deliberately **not** part of `notices.refresh()`: that runs in a background
+thread on every chat turn, and a dozen PDF downloads would turn a cheap freshness check
+into a minute of network for a student asking about fees. One hop is followed to find the
+PDF behind a notice page — without it this covered four notices out of sixty-four.
+
+The second half of the request — evergreen tools fed by the latest data rather than the
+prose being indexed — is `30` and `31`.
+
+## 30 · `FIXED` · Cutoff ranks from the published lists
+
+> so i have got a good data for cutoffs for year 2079-2082 …
+> `ioe-entrance.bibeksubedi0001.com.np/ioe-cutoff-rank` (all 4 campus) except chitwan …
+> we could fetch these data into a csv file and prepare a genuine cutoff rank answers to
+> students. for this; do we have the accurate courses provided and seats allocated for
+> these 5 campuses or 4 except chitwan??
+
+**Answering the question first: yes, all five, Chitwan included.** `seats.py` holds
+`REGULAR` and `FULL_FEE` across all five constituent campuses plus ten affiliated
+colleges, and `verify()` asserts seventeen derived totals against the booklet's published
+figures. The *cutoff* data is the narrower set — four campuses, no Chitwan.
+
+Done in `5261ac8`. `cutoffs.py` had existed since the rewrite reading an empty CSV and
+answering "no cutoff data", because the plan behind it stated flatly that no cutoff data
+existed anywhere. It did. **228 first-list cutoffs** now: four campuses, four years,
+Regular and Full-fee, built by `notes/scrape_cutoffs.py`.
+
+`source_url` is the **official campus admission list** each figure derives from, not the
+aggregator the scrape reads. 214 rows have one; the 14 Purwanchal rows without carry an
+empty cell, because an empty cell is a known gap and a wrong citation is a student sent to
+the wrong document.
+
+**`verify()` cross-checks rather than trusts, and both assertions hold across all 228
+rows.** Every programme with a cutoff must have seats at that campus in `seats.py` —
+transcribed from the booklet by an entirely separate route, so the two datasets agreeing
+is evidence and not a tautology. And every Full-fee cutoff must sit deeper than its
+Regular counterpart, because a Regular seat is cheaper for the same degree and fills
+first; an inversion means a column was read wrong.
+
+Three faults found by running real questions through the graph, none of which a unit test
+would have shown:
+
+- *"i got rank 660, what can i study"* was looking 660 up in the pass list and putting **a
+  stranger's name and district** beside real cutoff figures. That is exactly the hazard
+  `results.lookup_context`'s `skip_ranks` was added for, and it is now an eval case in
+  both directions.
+- *"what was the cutoff for civil at thapathali"* answered "I do not have that", because
+  the tool demanded the student's own rank for a question that does not need one.
+- *"can i get mechanical with my rank"* produced no block at all.
+
+`SYSTEM_PROMPT` said *"You have no cutoff data at all"* and *"never state a cutoff rank"*.
+Both became false and the second forbade the feature outright, so the rule is narrowed to
+what it was actually protecting: a cutoff comes only from a cutoff block, a seat count is
+never a substitute for one, and none of it becomes a percentage or the word "safe".
+
+Scope is stated in every block, because a student reading their rank against the wrong
+category is the mistake this data makes possible: **open/general category, first admission
+list, constituent campuses, four of them.**
+
+## 31 · `BUILT` · Seat chances from the priority list
+
+> so, if it's possible to fetch the current priority list, for pcampus only (experiment)
+> and can we determine the chances of a student geting the course he chosed, by arithmetic
+> of availables seats, his priority, high rankers(1 is high) choosing the subject as
+> priority and every factor considered(quota) — can we build this evergreen arithmetic
+> that runs on any data provided(csv) each year we just have to update the prioirty list
+> csv and it calucaltes across these campuses.
+> (this is for after filling priority form, `30` is for before filling priority form.)
+
+That split is the right architecture and it survived into the code. `30` is what a student
+has *before* they apply — last year's published outcome. This is *after*, and it is not an
+estimate: IOE admits by walking the merit list from rank 1 and placing each applicant into
+the best still-open programme on their own list. That is a serial dictatorship, so given
+the published applications the outcome is fully determined and can be recomputed.
+
+Built in `823c63c`, on top of the simulation in `554482f` rather than from scratch.
+
+**Generalised as asked.** Datasets are discovered, not declared —
+`docs/data/<campus>_priority_<year>.csv`. Seats come from `seats.py` instead of a
+hardcoded tuple per priority code, so the booklet is transcribed once. That refactor was
+checked rather than trusted: the reference output was captured first, and afterwards the
+simulation reproduces it **exactly** — all sixteen cutoffs and the 1,647-applicant count.
+
+**Pulchowk only in practice.** It is the one published list we hold. A question naming any
+other campus returns nothing rather than borrowing Pulchowk's numbers, and falls back to
+`30`.
+
+**Quota: open category only**, and the block says so. The booklet states Regular seats are
+*inclusive* of quota — women's, teacher/staff, sponsored and foreign seats are carved out
+of Regular rather than added to it — so modelling them wrong inflates every open-category
+estimate, and those tables are the grid the booklet's own translation flags as its highest
+transcription risk. A quota applicant is told plainly that these figures do not describe
+their case.
+
+Four things only running real questions caught:
+
+- **The attainable list was sorted by cutoff**, which for a mid-range rank opens with
+  three Full-fee seats — and the model read that order as a recommendation and advised
+  listing Full-fee first. That is the one piece of advice the strategy text exists to
+  forbid. Grouped by programme now, Regular above its Full-fee twin, labelled
+  "alphabetical, not a ranking".
+- **`chances` and `cutoffs` both fired at Pulchowk** and the model quoted a published 2082
+  figure inside an answer about the 2083 simulation. `chances` supersedes.
+- **That fix was wrong the first time.** Clearing the block with `pop()` does nothing,
+  because `blocks` reduces with `merge_blocks` and the deleted key is re-supplied from
+  accumulated state on the next merge.
+- **`priority_rules` had no deterministic floor**, so whether the rules appeared was left
+  to the planner — and they came and went between identical runs of the suite. For section
+  5, the prose saying an applicant who turns down a lower priority is excluded from the
+  process entirely, that is not good enough.
+
+`cutoffs.py` also gained the welded-verdict treatment this module already had: a smaller
+rank number being better is not something a 7B model reliably knows — it was recorded
+reading "last admitted rank 55" as standing above a rank of 2000 — so every block spells
+the comparison out instead of leaving it to be derived.
+
+## 32 · `FIXED` · Better starting questions
+
+> replace with genuine, differentiating questions as starting questions as example in the
+> ask section.
+
+Done in `edb95ae`. The four chips were chosen when retrieval, the pass list, the date
+logic and the payment guides were the four paths worth showing; three more have shipped
+since, and the comment above them still claimed each exercised a different path.
+
+| chip | path |
+| --- | --- |
+| With rank 500, what should I put first at Pulchowk? | `chances` |
+| How many computer engineering seats does Pulchowk have? | `seats` |
+| Did form 2083-4001 pass? | `lookup` |
+| What does the whole degree cost at full fee? | `fees` |
+
+Each was run through the detectors and then through the graph, because a suggested
+question that lands in generic retrieval advertises nothing. `Hero.tsx`'s placeholder had
+been a verbatim copy of the third chip; it is the cutoff path now.
+
+**Checking them found the bug worth having done this for.** *"What should I put first"* —
+the single question `31` exists to answer — did not fire it. `_PRIORITY_INTENT_RE` had
+`first choice` and `first priority` and nothing for `put first`, so the flagship question
+fell through to generic retrieval. It now fires on that and stays silent on "what is the
+first day of admission", "who came first in the entrance" and "what documents do i need
+first".
+
+Two chips also answered wrongly on their first run — the degree cost came back as the
+admission-day figure, and Thapathali Civil as "367 in 2083" against a block that said
+2082: 387. **Both blocks were correct**; the model misread them. Three runs each are 3/3
+right, so it is variance rather than a fault — but the cutoff miss got a digit and a year
+wrong out of four pairs on one line, so the history states the newest figure on its own
+line above the rest now.
+
+---
+
+### Appendix — `28`–`32` as originally filed
+
+Kept verbatim, the way `24` and `26` keep theirs. The numbered issues above quote from
+this and condense the URL lists; nothing here is superseded, it is the source.
 
 1. i think we should fetch notices from all the constituent campuses, and IOE, not from TU
  a. https://entrance.ioe.edu.np/

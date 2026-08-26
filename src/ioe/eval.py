@@ -162,13 +162,11 @@ CASES: list[tuple[str, str, set[str], set[str]]] = [
     # must not drag in the stranger who actually holds that rank -- which is the hazard
     # results.lookup_context's skip_ranks was added for.
     ("cutoffs", "i got rank 660, what can i study", {CUTOFFS}, {LOOKUP, DECLINED}),
-    # Names Pulchowk, so the allocation answers it; the four-year cutoff history now
-    # stands alongside rather than being suppressed, so it is no longer asserted absent.
     (
         "cutoffs",
         "is rank 340 enough for computer engineering at pulchowk",
-        {CHANCES},
-        {LOOKUP, DECLINED},
+        {CUTOFFS},
+        {CHANCES, LOOKUP, DECLINED},
     ),
     ("cutoffs", "what was the cutoff for civil at thapathali", {CUTOFFS}, {DECLINED}),
     ("cutoffs", "can i get mechanical with my rank", {CUTOFFS}, {DECLINED}),
@@ -185,8 +183,18 @@ CASES: list[tuple[str, str, set[str], set[str]]] = [
         {CHANCES},
         {DECLINED},
     ),
-    ("chances", "i am rank 2000, can i get computer at pulchowk", {CHANCES}, set()),
-    ("chances", "rank 40, which programmes can i get", {CHANCES}, {DECLINED}),
+    # "can i get X" is a cutoff question even at Pulchowk, and must NOT reach the 2083
+    # allocation: most students asking it have not filed a priority form, and a simulated
+    # cutoff sitting beside four published years reads as a fifth year of the same thing.
+    ("chances", "i am rank 2000, can i get computer at pulchowk", {CUTOFFS}, {CHANCES}),
+    ("chances", "rank 40, which programmes can i get", {CUTOFFS}, {CHANCES, DECLINED}),
+    # The other side of the split: form language present, so the allocation answers it.
+    (
+        "chances",
+        "i filled my priority form, rank 500, where will i land at pulchowk",
+        {CHANCES},
+        {DECLINED},
+    ),
     (
         "chances",
         "i got rank 300, what can i get at thapathali",

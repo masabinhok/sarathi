@@ -4,8 +4,11 @@ Two halves, both about the same form. The first is the rules for filling it in, 
 out rather than retrieved. The second simulates the allocation those applications produced
 and answers "with my rank, what would I have got".
 
-They pair with `cutoffs.py`, which is the same question asked earlier. Before the form is
-filled, all anyone has is last year's published outcome, which is what `cutoffs.py` holds.
+They pair with `cutoffs.py`, which is the same question asked earlier, and the two are
+kept strictly apart. Before the form is filled, all anyone has is the published outcome of
+past years, which is what `cutoffs.py` holds — and that is the question most students
+actually ask, so it is the default. This module answers only when the message says the
+student is dealing with the priority form itself.
 After it is filled, the priority applications are public and the allocation is no longer a
 guess: IOE admits by walking the merit list from rank 1 and placing each applicant into
 the best still-open programme on their own list, which is a serial dictatorship, which
@@ -232,22 +235,27 @@ _PROGRAM_WORDS: dict[str, str] = {
 _REGULAR_RE = re.compile(r"\bregular\b", re.IGNORECASE)
 _FULLFEE_RE = re.compile(r"\bfull[\s-]?fee\b", re.IGNORECASE)
 
-# A priority question is a rank plus intent to choose or place programmes. Without the
-# intent, a bare "rank 34" is a pass-list question that results.py already answers, and
-# firing here as well would attach an unrelated candidate's identity to a question that
-# was never about them.
-_PRIORITY_INTENT_RE = re.compile(
-    r"\bpriorit(?:y|ies)\b|\bpreferenc\w*\b|\bfill\b|\bchoose\b|\bchoos\w*\b|"
-    r"\bwhich\s+(?:program\w*|branch\w*|subject\w*|faculty|stream|course|department)\b|"
-    r"\bwhat\s+(?:program\w*|branch\w*|subject\w*|faculty|stream|course|department)\b|"
-    r"\bget\s+into\b|\b(?:will|can|could|would)\s+i\s+get\b|\bchanc\w*\b|"
-    r"\bsafe\b|\bfirst\s+(?:choice|priority)\b|\bin\s+what\s+order\b|\border\s+of\b|"
-    # "what should I put first" is the question this whole module exists to answer and it
-    # matched none of the above -- no programme named, and "first" not followed by
-    # "choice" or "priority". Found by checking what the app's own example questions
-    # actually fire.
-    r"\b(?:put|list|rank|place|pick|select)\b[^.?!]{0,30}\bfirst\b|"
-    r"\bwhat\s+should\s+i\s+(?:put|choose|pick|list|go\s+for)\b",
+# The 2083 allocation answers one question: "I am filling the priority form -- given who
+# applied, where does my rank land?" It must not answer "can I get Computer at Pulchowk",
+# which is the question most students actually ask and which `cutoffs.py` answers from four
+# published years.
+#
+# The two are different kinds of number and they collide badly if both are offered. A
+# closing rank is what a published list did. A simulated cutoff is what this year's
+# applications imply, for one year, at one campus, and only for people who have already
+# filed a priority list. Offered side by side to someone who has not filed one, the
+# simulation looks like a fifth year of cutoff data and is not.
+#
+# So this fires only on explicit priority-form language -- the word itself, or ordering,
+# or having filed one. A bare rank plus "can I get" goes to the cutoff history, which is
+# the honest answer for someone still deciding.
+_FORM_INTENT_RE = re.compile(
+    r"\bpriorit(?:y|ies)\b|\bpreference\s+(?:form|order|list)\b|"
+    r"\b(?:filled|filling|submitted|applied|chosen|picked)\b[^.?!]{0,30}"
+    r"\b(?:form|list|choices|order)\b|"
+    r"\bin\s+what\s+order\b|\bwhat\s+order\b|\border\s+of\s+preference\b|"
+    r"\b(?:put|list|rank|place)\b[^.?!]{0,30}\bfirst\b|"
+    r"\bwhat\s+should\s+i\s+(?:put|choose|pick|list)\b",
     re.IGNORECASE,
 )
 
@@ -565,9 +573,11 @@ def chance_context(text: str, campus: str = CAMPUS) -> str:
     year = latest(campus)
     if not year or _OTHER_CAMPUS_RE.search(text):
         return ""
-    programmes_named = find_programs(text)
-    if not (_PRIORITY_INTENT_RE.search(text) or programmes_named):
+    # Naming a programme is not enough on its own: "can I get Computer at Pulchowk" names
+    # one and is a cutoff question. The form language is what makes it this module's.
+    if not _FORM_INTENT_RE.search(text):
         return ""
+    programmes_named = find_programs(text)
     ranks = find_ranks(text, include_topper=False)
     if not ranks:
         return ""

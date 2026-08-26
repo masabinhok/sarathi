@@ -126,6 +126,11 @@ different pool entirely. And the pass list in
 form number, rank, name, gender and district and **no programme or campus column**, so it
 cannot say what anyone applied for or where.
 
-For the current year, `src/ioe/priority.py` reaches further where it can: it simulates the
-actual allocation over the published priority applications rather than reading last year's
-outcome.
+`src/ioe/priority.py` holds the other half of the chances question and is deliberately
+kept out of this one's way. It simulates the actual allocation over the published priority
+applications, which is a better answer — but only for somebody who has already filed a
+priority form. Most students asking "can I get Computer at Pulchowk" have not, and a
+simulated cutoff sitting beside four published years reads as a fifth year of the same
+kind of number when it is not one. So the allocation fires only on explicit
+priority-form language, and every other rank question at every campus is answered from
+this file.

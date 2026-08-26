@@ -231,7 +231,7 @@ def ensure_default_calls(calls: list[dict], state: ChatState) -> list[dict]:
     # skip_ranks because a rank inside a chances question is the student's own, stated
     # hypothetically. Looking it up answers a question nobody asked, with an unrelated
     # candidate's name and district, next to real cutoff figures.
-    chances = cutoffs.is_cutoff_question(raw) or cutoffs.is_cutoff_question(english)
+    chances = cutoffs.is_own_rank(raw) or cutoffs.is_own_rank(english)
     if "lookup_result" not in named and results.lookup_context(raw, skip_ranks=chances):
         out.append(
             _call(
@@ -346,9 +346,7 @@ def enforce_floor(blocks: dict[str, str], state: ChatState) -> dict[str, str]:
             blocks["fees"] = recovered
 
     if not blocks.get("lookup"):
-        recovered = results.lookup_context(
-            raw, skip_ranks=cutoffs.is_cutoff_question(raw)
-        )
+        recovered = results.lookup_context(raw, skip_ranks=cutoffs.is_own_rank(raw))
         if recovered:
             blocks["lookup"] = recovered
 

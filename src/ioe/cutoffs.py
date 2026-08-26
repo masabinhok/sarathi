@@ -273,6 +273,19 @@ _INTENT = re.compile(
 )
 
 
+def is_own_rank(text: str) -> bool:
+    """Whether a rank in this message is the student's own rather than someone to look up.
+
+    True for both halves of the chances question -- the cutoff history and the priority
+    allocation -- because in both the number is hypothetical. Looking it up would answer a
+    question nobody asked, with an unrelated candidate's name and district, beside real
+    figures. See results.lookup_context's skip_ranks.
+    """
+    from ioe import priority
+
+    return is_cutoff_question(text) or bool(priority.chance_context(text))
+
+
 def is_cutoff_question(text: str) -> bool:
     """Whether this is a rank-against-cutoff question rather than a pass-list lookup."""
     return bool(_INTENT.search(text or ""))

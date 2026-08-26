@@ -6,15 +6,16 @@ wrong amount. Nothing here changes that. What it changes is the starting point -
 reviewer reads extracted text instead of retyping a PDF, and the extraction is recorded
 with what it is and is not sure about.
 
-Three things were measured across the fifteen PDFs in docs/downloads/ before this module
+Three things were measured across the source PDFs in docs/downloads/ before this module
 was written, and the design follows from them:
 
-  13 of 15 carry a real text layer. Only 04_Payment_Notice.pdf is a true scan. This is
-  a text-extraction problem, not an OCR problem, and needs no OCR dependency.
+  Almost all of them carry a real text layer -- 13 of the 15 sampled, with only
+  04_Payment_Notice.pdf a true scan. This is a text-extraction problem, not an OCR
+  problem, and needs no OCR dependency.
 
-  `pdftotext -layout` reproduces tabular data exactly. The applicant table in
-  Pulchowk_Priority_Applicants_2083-1.pdf comes out row for row identical to the CSV that
-  was transcribed from it by hand. Tables are where the numbers live, and tables are the
+  `pdftotext -layout` reproduces tabular data exactly. Checked against a published
+  applicant priority list: the table came out row for row identical to the CSV that had
+  been transcribed from it by hand. Tables are where the numbers live, and tables are the
   part that extracts cleanly.
 
   Nepali prose comes out one of two ways, and one of them is silent garbage. Some PDFs
@@ -217,7 +218,7 @@ def _preeti_density(line: str) -> float:
     return len(_PREETI_MARKS.findall(stripped)) / len(stripped)
 
 
-# Measured over every line of the fifteen PDFs in docs/downloads/. The distribution is
+# Measured over every line of the source PDFs in docs/downloads/. The distribution is
 # continuous, not two clean humps -- roughly 360 lines sit between 0.05 and 0.15 -- so this
 # threshold is a judgement about which mistake to make, not a gap in the data.
 #

@@ -1,691 +1,480 @@
+"""The conversation graph: choose the evidence, then answer from it.
+
+    START ─(route_question)─┬─► small_talk ────────────────────────────┐
+                            │                                          ▼
+                            └─► prepare ─(deflect?)─┬─► deflect ─► END │
+                                                    │                  │
+                                                    └─► plan ─► tools ─┴─► assemble ─► answer ─┬─► summarize ─► END
+                                                          ▲              │                    └─► END
+                                                          └──(rounds)────┘
+
+Two model calls on an ordinary turn, where the old graph made five. The planner reads the
+conversation and picks tools; `search_documents(query=...)` is the standalone-query
+rewrite, so that one call does the work `rewrite_query` and `is_in_scope` used to do
+separately, and `best_match`'s embedding call is gone with them.
+
+Three things here are load-bearing and none of them are obvious.
+
+**The model's tool choice is additive only.** `ensure_default_calls` puts back everything
+today's unconditional pipeline guaranteed: retrieval always runs, and the pass-list and
+fee lookups run whenever their detectors fire, whatever the planner did or did not ask
+for. Ollama ignores `tool_choice` (langchain_ollama marks the argument unused), so there
+is no way to require a call at the model layer -- it has to be required here. The floor
+this sets is the important part: if tool selection fails completely, the turn degrades to
+exactly the old pipeline plus one wasted planner call.
+
+**Tool results do not go into the prompt as ToolMessages.** They are re-rendered by
+`tools.render_blocks` in a fixed order. ToolMessages would arrive in call order, decided
+by a 7B model, and `fees.fee_context` records what that costs: placed ahead of the
+retrieved documents the worked fee figures were ignored and the model went back to the
+raw tables and multiplied. The app keeps the placement.
+
+**There is no scope classifier.** Issue 24 is a report of one refusing `foreign?` and
+`what is its source` -- a follow-up judged as though it were a whole message looks like
+nothing at all. A question with no evidence behind it now gets `UNCOVERED_BLOCK` and a
+real reply that stays in the conversation. The only thing still turned away outright is
+task substitution, in `scope.py`, and only because the prompt was measured failing at it.
+"""
+
 import asyncio
-import re
+from typing import Annotated
 
 import aiosqlite
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import (
+    AIMessage,
+    AnyMessage,
+    HumanMessage,
+    RemoveMessage,
+    SystemMessage,
+)
 from langchain_ollama import ChatOllama
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+from langgraph.constants import TAG_NOSTREAM
 from langgraph.graph import END, START, StateGraph
-from langgraph.graph.message import MessagesState
+from langgraph.graph.message import REMOVE_ALL_MESSAGES, MessagesState, add_messages
+from langgraph.prebuilt import ToolNode
 
+from ioe import fees, results, seats
 from ioe.dates import annotate_dates, today_context
-from ioe.fees import FEE_SOURCE, fee_context
-from ioe.notices import digest as notice_digest
-from ioe.rag import (
-    MAX_SOURCES,
-    MIN_RELEVANCE,
-    NUM_CTX,
-    OLLAMA_URL,
-    TOP_K,
-    format_context,
-    get_store,
-    keep_grounded,
-    rerank,
-    source_payload,
+from ioe.fees import FEE_SOURCE
+from ioe.language import (
+    english_only_preface,
+    read_in_english,
+    without_language_request,
 )
-from ioe.results import RESULT_SOURCE, lookup_context
+from ioe.memory import recent_messages, should_summarize, summarize, unseen
+from ioe.priority import PRIORITY_SOURCE
+from ioe.prompts import (
+    CONVERSATION_HEADER,
+    PLANNER_PROMPT,
+    SYSTEM_PROMPT,
+    UNCOVERED_BLOCK,
+)
+from ioe.rag import MAX_SOURCES, NUM_CTX, OLLAMA_URL, keep_grounded
+from ioe.results import RESULT_SOURCE
+from ioe.scope import OFF_TOPIC_SENTENCE, is_small_talk, is_task_substitution
+from ioe.seats import SEAT_SOURCE
 from ioe.threads import DB_PATH
+from ioe.tools import EVIDENCE_BLOCKS, TOOLS, render_blocks
 
 TEXT_MODEL = "qwen2.5:7b"
 
-SYSTEM_PROMPT = SystemMessage(
-    content="""You are Sarathi, the IOE entrance and admission assistant -- a guide for \
-students applying to the Institute of Engineering (IOE), Tribhuvan University, Nepal, \
-and for the parents helping them.
-
-You help with:
-- The IOE entrance examination for BE, BArch, and postgraduate programs
-- Eligibility, application steps, required documents, and admission timelines
-- Exam structure, syllabus coverage, marking, and preparation strategy
-- IOE constituent and affiliated campuses -- Pulchowk, Thapathali, Purwanchal, \
-Paschimanchal, Chitwan and the rest -- and the programs each offers
-
-Scope: you answer ONLY questions about IOE admissions and entrance exams. If a \
-student asks about anything else -- coding, homework, general knowledge, other \
-universities, personal advice -- you must refuse. Do not answer the off-topic question \
-even partially. Say in one sentence that you only handle IOE admission and entrance \
-questions, then invite them to ask one.
-
-Language: you write in English. Always.
-
-Using a pass list lookup:
-- A "Pass list lookup" block below is an exact record from the published result table, not a guess. Never alter a rank, name, or district from it.
-- Restate the record as an ordinary sentence to the student. Do not copy the block itself: neither its bracketed header nor its field labels.
-- If the lookup says the number does not appear on the list, say so plainly, note that this cannot distinguish a candidate who did not pass from a mistyped number, and suggest verifying on entrance.ioe.edu.np. Be kind about it; this is hard news to receive.
-- The lookup covers both directions: a form number resolves to a rank, and a merit rank resolves to the candidate holding it. If a block is present, answer from it directly and do not ask the student for a form number they did not need to give.
-- Never guess whether a candidate passed, never infer a rank from a form number, and never infer a candidate from a rank.
-- Refer to a candidate as "they". Never guess a candidate's gender from their name, and do not state a gender even when you could infer one.
-- A lookup can also be by name or by district, and either can match one candidate, several, or none. When a block says several candidates match, list what it gave you and ask the student which one they mean -- a form number, a fuller name, or a district would narrow it down. Never pick one for them, and never describe a candidate the block did not include.
-- When a block says a name matched but not the district the student gave, say exactly that -- it is not evidence the candidate never sat the exam, only that this particular record does not carry that district. Do not treat it as a "not found".
-- A district lookup names only the best-ranked candidates from that district, and says so. Never imply the ones shown are the only candidates from there.
-
-Using the reference documents:
-- Reference documents may be supplied below under "Reference documents". When they \
-are, answer from them rather than from memory, and name the source you used.
-- If the documents carry a year, state it, so the student knows which admission cycle \
-the answer describes.
-- If the documents do not cover the question, say so directly and point the student to \
-the notice feed in this app, to ioe.edu.np or entrance.ioe.edu.np, or to their campus \
-admission office. Do not fill the gap from memory.
-- Do not end your answer with a source list, a bibliography, or a "References" heading. \
-The interface prints the documents you were given underneath your answer, with links to \
-the official notices. Naming a source mid-sentence is still welcome; repeating the list \
-is not.
-
-Using the notice feed:
-- A "Notice feed" block below lists the most recent notices published on the official \
-sites, newest first. It is the only current record of what has been published; the \
-reference documents were prepared earlier and do not know about anything in it.
-- When a student asks whether something has been published, whether there is anything \
-new, or what the latest notice is, answer from this block. Give the title, the date in \
-both calendars, which campus or board published it, and a Markdown link.
-- Never tell a student that nothing has been published recently unless the block is \
-empty. If the block lists a notice, it exists.
-- The block gives titles, not contents. Never describe what a notice says, or state a \
-name, list, rank, date, or amount from it, on the strength of its title. Say what was \
-published and when, and link the student to it so they can read it.
-- A notice appearing here that the reference documents do not cover is normal and worth \
-saying plainly: the notice is newer than the documents.
-
-Dates:
-- A "Today's date" block below gives the current date in both calendars. Use it rather than guessing, and never state a date you were not given.
-- A "Date conversions" block, when present, has already resolved the BS dates in play to AD and to an offset from today. Read those off; do not do calendar arithmetic yourself.
-- Every date and day-count you write must appear verbatim in one of these blocks. Do not convert, add, subtract, or restate a date in any other form. When you give an offset, copy it from the line for that exact date -- offsets on neighbouring lines belong to other dates.
-- Say plainly when a deadline has already passed, and how long ago.
-- When a document says a deadline has moved, that a list is final, or that a student must appear in person to verify documents, put that date in **bold** and say plainly what they have to do. These are the answers a student cannot afford to skim past.
-- Do not volunteer the date in answers that did not ask about timing.
-
-Formatting your answer:
-- Write in short paragraphs separated by a blank line. A dense block goes unread by someone scanning for one fact.
-- Use "- " bullets for a set of documents, requirements, or options, and numbered "1." steps for a procedure the student works through in order.
-- Use **bold** for a deadline, an amount, or anything that costs the student their place if missed. Use it sparingly; bolding everything bolds nothing.
-- Write in Markdown. Paragraphs, "- " bullets, numbered steps, **bold**, headings, tables, and [links](url) all render properly for the student.
-- Use a table when you are comparing the same fields across several things -- campuses, seat types, payment methods. Use a list when you are not. A two-row table is a list wearing a costume.
-- Never wrap a table, a list, or anything else in a code fence. Write it directly. A fence is for code, and nothing in IOE admissions is code.
-- When a document gives an official URL, write it as a Markdown link.
-- Do not use emoji, and do not decorate an answer with headings it does not need. A four-sentence answer is four sentences, not a document.
-
-Rules:
-- Never invent year-specific facts. Exam dates, deadlines, fees, seat counts, cutoff \
-marks, and results change every year. If you are not certain, say so plainly rather \
-than guessing.
-- Never predict a student's chance of admission, and never state a cutoff rank or cutoff mark for a campus or program. You have no cutoff data. If asked, say so directly, and point them to the published results and their campus admission office rather than offering an estimate.
-- A seat count is not a rank threshold. Never compare a student's rank against a number of seats, and never tell a student their rank falls within, qualifies for, is safe for, or is close to a program. Seat totals in these documents say how many students a campus takes, not how far down the merit list it reaches.
-- Distinguish clearly between stable facts about the process and details a student must \
-verify for their own admission year.
-- Be clear, direct, and encouraging. Students asking these questions are often anxious, \
-so keep answers concrete and free of filler."""
-)
-
-
-REWRITE_PROMPT = """Rewrite the student's latest message as a standalone search query \
-for a document search over IOE admission documents.
-
-Resolve any pronouns and implied subjects using the conversation. Keep the wording of \
-the original where you can. Output only the query, with no preamble or quotes.
-
-Conversation so far:
-{history}
-
-Latest message: {question}
-
-Standalone search query:"""
-
-
-class ChatState(MessagesState):
-    # The student's question as the model should read it: any "reply in Nepali" taken
-    # out, and translated to English if it was not written in English. The message the
-    # student actually typed stays in `messages`, which is what the transcript shows.
-    question: str
-    query: str
-    context: str
-    lookup: str
-    # Fee totals worked out in full, so the model reads them instead of doing the
-    # arithmetic that it got wrong every time it was asked.
-    fees: str
-    sources: list[dict]
-    # The refusal the guard wrote if it turned the question away, or "".
-    refusal: str
-
+# One round: the planner picks tools, they run, the answer is written. Raising this needs
+# dedupe across rounds first -- a 7B model handed what it asked for is likelier to ask
+# again than to ask for something better.
+MAX_TOOL_ROUNDS = 1
 
 model = ChatOllama(model=TEXT_MODEL, base_url=OLLAMA_URL, num_ctx=NUM_CTX)
 
-
-# ── Keeping the answer in English ─────────────────────────────────────────────
-# SYSTEM_PROMPT says to answer in English and on its own that does not hold. Measured
-# against the live bot: asked "please reply in Nepali", asked in Nepali with no
-# instruction at all, and asked for Hindi, qwen2.5:7b switched every time -- and what it
-# produced was not worth reading, mixing Hindi into Nepali sentences and inventing
-# syllabus subjects while it was at it.
-#
-# Four rounds of prompting could not fix it. Told to refuse and then answer, the model
-# wrote the refusal in Nepali; given the refusal to copy, it copied it and then treated
-# it as the whole reply on 3 of 12 runs; told the refusal was already handled and to
-# ignore the request, it went back to Nepali on 12 of 18. The pattern across all four is
-# that naming the request in the prompt is what keeps it alive.
-#
-# So the request is not named. It is removed. The sentence asking for another language
-# is stripped out of the question, the app says the one thing that needs saying, and the
-# model is handed an ordinary question -- which it answers in English, because that is
-# what it does with ordinary questions.
-#
-# SYSTEM_PROMPT is down to one line on the subject for the same reason. The paragraph it
-# used to carry explained the rule, offered two justifications the model could pass on,
-# and told it what to do when asked for Nepali -- nine lines that named the request four
-# times, in the prompt, on every turn, including the turns nobody asked.
-
-_DEVANAGARI = re.compile(r"[\u0900-\u097f]")
-_LATIN = re.compile(r"[A-Za-z]")
-
-# Languages a student might ask to be answered in. English is deliberately absent: a
-# student asking for English is asking for what they are already getting.
-_OTHER_LANGUAGE = re.compile(
-    r"\b(nepali|nepalese|hindi|newari|newa|maithili|bhojpuri|urdu|bengali|bangla|"
-    r"tamil|chinese|mandarin|japanese|korean|arabic|russian|spanish|french|german|"
-    r"portuguese|italian|devanagari)\b"
-    r"|नेपाली|हिन्दी|हिंदी|मैथिली|भोजपुरी|नेवारी|उर्दू",
-    re.IGNORECASE,
-)
-
-# A language on its own is not a request -- "is the exam set in Nepali" is a question
-# about the exam. It takes a language and something that means "say it", together.
-_SPEECH = re.compile(
-    r"\b(reply|replies|answer|answers|respond|responds|write|writes|say|says|speak|"
-    r"speaks|talk|talks|explain|explains|translate|translates|tell|tells)\b"
-    r"|जवाफ|जवाब|भन्नु|लेख्नु|बोल्नु|दिनुहोस्|सुनाउनु|बताइए|समझाइए|लिखिए",
-    re.IGNORECASE,
-)
-
-# Devanagari ends a sentence with a danda, which no ASCII sentence splitter knows about.
-_SENTENCE = re.compile(r"(?<=[.!?।])\s+|\n+")
-
-# The app's own words. Fixed, so the wording cannot drift from one turn to the next, and
-# naming no particular language, because the same sentence has to serve a request for
-# Nepali and a request for Hindi.
-ENGLISH_ONLY_SENTENCE = (
-    "I answer only in English. The notices I work from are in English, and I am not "
-    "reliable enough in any other language to be trusted with something you will act on."
-)
-
-TRANSLATE_PROMPT = """Translate the student's message into English.
-
-Output only the translation. No preamble, no quotes, no explanation, no note about what \
-you did. Keep a question a question. Leave proper nouns, form numbers, dates and any \
-English already in the message exactly as they are.
-
-Message: {question}
-
-English:"""
+# The planner has the tools bound; the answering model does not, and cannot emit a tool
+# call as a result. That is the first and most structural layer of the streaming filter:
+# api.py forwards tokens from the `answer` node, and nothing else can produce them there.
+planner = model.bind_tools(TOOLS)
 
 
-def without_language_request(question: str) -> str:
-    """The question with any "reply in <language>" sentence taken out of it.
-
-    Returns the question unchanged when it contains no such sentence -- and, crucially,
-    when the request *is* the whole question. "Can I answer the exam paper in Nepali?"
-    reads as a request by every test above, and stripping it would leave nothing to
-    answer; a student asking that is asking about the exam, so they get the ordinary
-    treatment and an ordinary answer.
-    """
-    parts = [p for p in _SENTENCE.split(question) if p.strip()]
-    kept = [p for p in parts if not (_OTHER_LANGUAGE.search(p) and _SPEECH.search(p))]
-    if not kept or len(kept) == len(parts):
-        return question
-    return " ".join(p.strip() for p in kept)
+# ── State ─────────────────────────────────────────────────────────────────────
+# Every turn-scoped key is cleared by fresh_turn() and nowhere else. State survives the
+# turn it was made on, and forgetting one key has twice produced the same bug: the
+# previous question's evidence answering this question, and the previous question's
+# citations printed underneath.
 
 
-def english_only_preface(question: str) -> str:
-    """The app's sentence for a turn that asked for another language, or "".
-
-    Used twice on the same turn and it must agree with itself: api._stream sends it
-    ahead of the model's first token so the student sees it as the answer opens, and
-    chat_node prepends it to the stored message so a reloaded conversation reads the
-    same as the one that was watched live.
-    """
-    if without_language_request(question) == question:
-        return ""
-    return f"{ENGLISH_ONLY_SENTENCE}\n\n"
+def merge_blocks(left: dict | None, right: dict | None) -> dict:
+    """Accumulate blocks within a turn. None is the reset, and it is JSON, so it
+    survives the checkpointer."""
+    return {} if right is None else {**(left or {}), **right}
 
 
-def _in_devanagari(text: str) -> bool:
-    """Whether the text is written in Devanagari rather than merely quoting a term in it."""
-    return len(_DEVANAGARI.findall(text)) > len(_LATIN.findall(text))
+def add_sources(left: list | None, right: list | None) -> list:
+    """Accumulate citations, one per file, first occurrence winning."""
+    if right is None:
+        return []
+    out = list(left or [])
+    seen = {s.get("file") for s in out}
+    for source in right:
+        if source.get("file") not in seen:
+            out.append(source)
+            seen.add(source.get("file"))
+    return out
 
 
-def read_in_english(question: str) -> str:
-    """The question in English, translating it first if it was not written that way.
-
-    Telling the model not to mirror the student's language does not hold either -- it
-    answered a Nepali question in Nepali often enough to matter. Translating removes the
-    thing being mirrored: the model is handed an English question, and English questions
-    it answers in English every time.
-
-    This is the same bargain the documents already get. They are translated on the way in
-    because the model reads English better than it translates while it reasons, and a
-    question is no different. Retrieval gets the same benefit for free: an English query
-    embeds against an English index rather than across languages.
-
-    The student's own words are what the transcript keeps. Only the copy the model reads
-    is translated.
-    """
-    if not _in_devanagari(question):
-        return question
-    try:
-        rendered = model.invoke(
-            [HumanMessage(content=TRANSLATE_PROMPT.format(question=question))]
-        )
-        english = (rendered.content or "").strip()
-    except Exception:  # noqa: BLE001 - a failed translation must not fail the answer
-        return question
-    # A translation that came back empty, or still in Devanagari, is no translation.
-    return question if not english or _in_devanagari(english) else english
+class ChatState(MessagesState):
+    # Exactly what the student typed. Tools that must not be handed a paraphrase read
+    # this: a form number survives no translation.
+    raw_question: str
+    # The same question with any "reply in Nepali" removed and translated to English.
+    question: str
+    blocks: Annotated[dict[str, str], merge_blocks]
+    sources: Annotated[list[dict], add_sources]
+    # Tool traffic. Never shown to the student and never in `messages`.
+    scratch: Annotated[list[AnyMessage], add_messages]
+    retrieved_text: str
+    rounds: int
+    # Long-term memory, and how much of the transcript it accounts for.
+    summary: str
+    summarized_upto: int
+    # A greeting: no evidence needed, and no "nothing matched" note either.
+    social: bool
+    # The app's own sentence when a turn is deflected, or "".
+    refusal: str
 
 
-def rewrite_query(state: ChatState) -> dict:
-    """Settle what the question is, then condense it into a search query.
-
-    Two steps that both have to happen before anything else reads the question. First it
-    is put into the form the model should see -- request to switch language removed, and
-    translated to English if it was not written in English. Then, on a follow-up, it is
-    condensed against the history: "what about the fees?" retrieves nothing useful on its
-    own, but becomes "BArch entrance exam fees". The first turn needs no condensing.
-    """
-    messages = state["messages"]
-    question = read_in_english(without_language_request(messages[-1].content))
-
-    prior = messages[:-1]
-    if not prior:
-        return {"question": question, "query": question}
-
-    history = "\n".join(
-        f"{'Student' if isinstance(m, HumanMessage) else 'Assistant'}: {m.content}"
-        for m in prior[-6:]
-    )
-    rewritten = model.invoke(
-        [
-            HumanMessage(
-                content=REWRITE_PROMPT.format(history=history, question=question)
-            )
-        ]
-    )
+def fresh_turn() -> dict:
+    """Every turn-scoped key, cleared. The one place this list exists."""
     return {
-        "question": question,
-        "query": (rewritten.content or question).strip() or question,
-    }
-
-
-def retrieve(state: ChatState) -> dict:
-    """Fetch supporting chunks. An empty or missing index simply yields no context."""
-    try:
-        # Over-fetch so a demoted chunk can actually be displaced by a better-suited one.
-        hits = get_store().similarity_search_with_relevance_scores(
-            state["query"], k=TOP_K * 2
-        )
-    except Exception:  # noqa: BLE001 - an unbuilt index must degrade to no context, not 500
-        return {"context": "", "sources": []}
-
-    ordered = rerank(state["query"], hits)
-    kept = [(doc, score) for doc, score in ordered if score >= MIN_RELEVANCE][:TOP_K]
-    # The scores travel with the documents because the two uses want different cuts: the
-    # prompt takes everything that cleared MIN_RELEVANCE, while the citation block takes
-    # only what is strong enough to be worth naming. See source_payload.
-    #
-    # Both keys are written on every path, including the empty one. State persists across
-    # turns, so a turn that retrieves nothing has to clear the previous turn's documents
-    # rather than inherit them and cite the wrong notice.
-    return {
-        "context": format_context([doc for doc, _ in kept]) if kept else "",
-        "sources": source_payload(kept),
-    }
-
-
-# ── Turns that need no documents ──────────────────────────────────────────────
-# "thanks" was costing more than a real question. rewrite_query is told to resolve
-# implied subjects from the history, and a greeting has no subject, so the model
-# borrowed the previous one: "thanks" was rewritten to "IOE admission exam date 2083",
-# which then retrieved 6.2 KB of exam-date documents to be prefilled into the prompt
-# before the model could say "you're welcome". Measured on the running app, one such
-# turn spent ~0.7s in the rewrite call and ~0.5s in the embedding call to assemble
-# context the answer could not use, and made every following turn slower still.
-#
-# So a turn that is only a greeting, a thank-you, or an acknowledgement is routed
-# straight to the answer. The test is a whole-message match against a fixed vocabulary,
-# not a judgement: anything with a question attached ("thanks, what about BArch?")
-# fails it and takes the ordinary path, because the cost of skipping retrieval on a
-# real question is an ungrounded answer, and the cost of not skipping it on a greeting
-# is a second of latency.
-#
-# Deliberately absent: "yes", "no", "sure". They read like small talk but they are
-# often the answer to something the assistant asked, and that turn may well need the
-# documents the question was about.
-_SMALL_TALK = re.compile(
-    r"^\W*(?:"
-    r"h+i+|h+e+y+|h+e+l+o+|hello|hiya|yo|namaste|namaskar|"
-    r"good\s+(?:morning|afternoon|evening|day)|good\s?night|"
-    r"thanks?|thank\s+you(?:\s+so\s+much|\s+very\s+much)?|thx|tysm|ty|"
-    r"ok(?:ay)?|k|cool|nice|great|awesome|perfect|got\s+it|understood|alright|all\s+right|"
-    r"bye|goodbye|see\s+you|"
-    r"how\s+are\s+you(?:\s+doing)?|what'?s\s+up|sup|"
-    r"who\s+are\s+you|what\s+can\s+you\s+do"
-    r")"
-    r"(?:\W+(?:there|again|sarathi|bro|sir|maam|ma'?am|dai|friend|buddy|man|guys?|"
-    r"a\s+lot|so\s+much|very\s+much))*\W*$",
-    re.IGNORECASE,
-)
-
-
-def is_small_talk(text: str) -> bool:
-    """Whether the message is social in its entirety and needs no documents."""
-    return bool(_SMALL_TALK.match(text.strip()))
-
-
-def small_talk(state: ChatState) -> dict:
-    """The no-documents path: answer from the system prompt and the conversation.
-
-    Every key retrieve and lookup_result would have written is written here too, and
-    written empty. State survives the turn it was made on, so leaving them alone would
-    hand chat_node the previous question's documents -- and print the previous
-    question's citations under "you're welcome".
-    """
-    return {
-        "question": state["messages"][-1].content,
-        "query": "",
-        "context": "",
-        "lookup": "",
-        "fees": "",
-        "sources": [],
+        "blocks": None,
+        "sources": None,
+        # Not []. `scratch` reduces with add_messages, which reads an empty list as
+        # "append nothing" and leaves last turn's tool traffic in place -- which would
+        # put the previous question's tool calls into this question's planner prompt.
+        # Clearing a message channel takes the sentinel.
+        "scratch": [RemoveMessage(id=REMOVE_ALL_MESSAGES)],
+        "retrieved_text": "",
+        "rounds": 0,
+        "social": False,
         "refusal": "",
     }
 
 
+# ── Entry ─────────────────────────────────────────────────────────────────────
+
+
 def route_question(state: ChatState) -> str:
-    """Whether this turn needs the retrieval pipeline at all."""
-    return (
-        "small_talk"
-        if is_small_talk(state["messages"][-1].content)
-        else "rewrite_query"
-    )
+    """Whether this turn needs evidence at all."""
+    return "small_talk" if is_small_talk(state["messages"][-1].content) else "prepare"
 
 
-def lookup_result(state: ChatState) -> dict:
-    """Answer from the exact tables -- the pass list and the fee schedule -- rather than
-    leaving either to retrieval and arithmetic."""
+def small_talk(state: ChatState) -> dict:
+    """A greeting or a thank-you: answered from the system prompt and the conversation."""
     asked = state["messages"][-1].content
-    # The raw message, not the rewritten or translated one: both of those go through the
-    # model, and a form number that survives a paraphrase may not survive a translation.
-    lookup = lookup_context(asked)
-    # Fees are the other way round. There is no exact token to preserve, and the rewrite
-    # is a translation into English, so a question asked in Nepali is recognised there
-    # and not in the original. Both are read, and the first that matches wins.
-    fees = fee_context(asked) or fee_context(state.get("question") or "")
-    return {"lookup": lookup, "fees": fees}
+    return {
+        **fresh_turn(),
+        "raw_question": asked,
+        "question": asked,
+        "social": True,
+    }
 
 
-# ── Keeping to the subject ────────────────────────────────────────────────────
-# SYSTEM_PROMPT says to refuse anything that is not IOE admission, and on its own that
-# does not hold either. Asked "lets go on a holiday", the assistant produced a six-point
-# holiday-planning questionnaire; the next message, "bahamas", then arrived in a prompt
-# stuffed with IOE fee documents and the model could make no sense of it. The second
-# failure looked like lost memory and was not -- history was intact, and asked outright
-# the model recalled the earlier turns correctly. It was the first failure spreading:
-# once an off-topic answer is in the transcript, every turn after it is incoherent.
-#
-# So the decision is taken out of the answering prompt and made on its own, where the
-# model has one thing to weigh instead of ninety lines of instructions. Three signals,
-# and refusing needs all three to agree, because refusing is the damaging mistake: a
-# student turned away with a real question has no way to appeal, while an off-topic
-# answer costs a few wasted seconds.
-#
-#   1. An exact pass list hit. A form number was found in the published table -- that is
-#      not a judgement call and nothing overrides it.
-#   2. The classifier. On its own it never once let an off-topic question through in 17
-#      tries, but it turned away 2 of 22 real ones, which is the wrong way round.
-#   3. So a NO gets a second opinion: how well the question matches the documents.
-#      Measured over 39 questions, both real questions the classifier misread scored
-#      above this line ("how do I pay with eSewa", 0.700) and nothing off topic reached
-#      it (the closest, "how do I apply to Kathmandu University", 0.573). Below it the
-#      question is merely unmatched, not off topic -- "how many seats are there in
-#      pulchowk" only reaches 0.478.
-#
-# Signal 3 is measured here, against the student's own words, rather than read off what
-# retrieve already scored. That score belongs to the rewritten query, and the rewrite is
-# what makes a follow-up IOE-shaped: "lets go on a holiday", asked after a greeting, was
-# condensed into "IOE admission documents for holiday related scholarships" and scored
-# 0.615 on it. A signal that the pipeline itself contaminated cannot be used to overrule
-# the one honest reading of the question. Running it only to overturn a NO also keeps it
-# off the common path, where it would cost an embedding call for nothing.
-SCOPE_RESCUE = 0.60
-
-# Judged on the student's own words, never on the rewritten search query. The rewrite
-# resolves a follow-up against the conversation, which for "bahamas" produced something
-# with IOE in it -- and a guard that reads a query the pipeline just made IOE-shaped is a
-# guard that passes everything. The transcript below the message is the conversation as it
-# actually happened, which is a different thing: "how many are there?" is a real question
-# about whatever was just discussed, and judged alone it looks like nothing at all.
-SCOPE_PROMPT = """Sarathi answers questions about applying to the Institute of \
-Engineering (IOE), Tribhuvan University, Nepal -- its entrance exam, results, fees, \
-forms, quotas, documents, deadlines, campuses, programs, notices -- and questions about \
-Sarathi itself.
-
-{history}Read the student's message. Could it plausibly be one of those? Say YES.
-Say NO only if the message is clearly about something else entirely: another university, \
-another country, coding, homework, general knowledge, news, travel, health, shopping, or \
-personal life.
-
-A short message that only makes sense as a follow-up to the conversation above -- \
-"how many are there?", "what about the fees?", "what did I just ask?" -- continues \
-whatever that conversation was about. Say YES.
-
-When in doubt, say YES.
-
-Message: {question}
-
-YES or NO:"""
-
-# The app's own words again, for the same reason they are the app's own in
-# english_only_preface: asked to write its own refusal, the model writes a paragraph and
-# then answers the question anyway.
-OFF_TOPIC_SENTENCE = (
-    "I only handle questions about IOE admissions and the IOE entrance exam, so I have "
-    "to leave that one alone. Ask me about the exam, your application, the fees, a "
-    "result, or a campus and I can help."
-)
+def prepare(state: ChatState) -> dict:
+    """Settle what the question is, and decide whether it is a question for us."""
+    asked = state["messages"][-1].content
+    question = read_in_english(without_language_request(asked))
+    return {
+        **fresh_turn(),
+        "raw_question": asked,
+        "question": question,
+        # Checked on both, because the detector reads English and a student may not have
+        # written in it. Cheap: both are already in hand.
+        "refusal": (
+            OFF_TOPIC_SENTENCE
+            if is_task_substitution(asked) or is_task_substitution(question)
+            else ""
+        ),
+    }
 
 
-def recent_exchange(messages: list, turns: int = 2) -> str:
-    """The last few turns verbatim, so a bare follow-up can be read in context."""
-    lines = []
-    for message in messages[-(turns * 2 + 1) : -1]:
-        speaker = "student" if isinstance(message, HumanMessage) else "Sarathi"
-        said = " ".join((message.content or "").split())
-        if said:
-            lines.append(f"{speaker}: {said[:400]}")
-    return "\n".join(lines)
+def route_after_prepare(state: ChatState) -> str:
+    return "deflect" if state.get("refusal") else "plan"
 
 
-def is_in_scope(question: str, history: str = "") -> bool:
-    """Whether the question is plausibly about IOE admission. Errs towards yes."""
-    preamble = f"So far in this conversation:\n{history}\n\n" if history else ""
-    try:
-        verdict = model.invoke(
-            [
-                HumanMessage(
-                    content=SCOPE_PROMPT.format(history=preamble, question=question)
-                )
-            ]
-        )
-    except Exception:  # noqa: BLE001 - a guard that cannot run must not refuse the student
-        return True
-    return not (verdict.content or "").strip().upper().startswith("NO")
+def deflect(state: ChatState) -> dict:
+    """The app's own words, with no model call.
 
-
-def best_match(question: str) -> float:
-    """How well the question itself matches the documents, ignoring the rewrite."""
-    try:
-        hits = get_store().similarity_search_with_relevance_scores(
-            question, k=TOP_K * 2
-        )
-    except Exception:  # noqa: BLE001 - an unbuilt index is not evidence of anything
-        return 0.0
-    ordered = rerank(question, hits)
-    return ordered[0][1] if ordered else 0.0
-
-
-def guard(state: ChatState) -> dict:
-    """Decide whether this question is answered at all."""
-    if state.get("lookup") or state.get("fees"):
-        return {"refusal": ""}
-    messages = state["messages"]
-    question = state.get("question") or messages[-1].content
-    history = recent_exchange(messages)
-    if is_in_scope(question, history) or best_match(question) >= SCOPE_RESCUE:
-        return {"refusal": ""}
-    return {"refusal": OFF_TOPIC_SENTENCE}
-
-
-def refuse(state: ChatState) -> dict:
-    """Turn the question away in the app's own words, with no model call at all.
-
-    Nothing is cited, because nothing was read. api._stream sends this text to the
-    student; it is stored here so a reloaded conversation shows the same refusal rather
-    than an empty turn.
+    The turn stays in the transcript, which is the whole difference from the guard this
+    replaces: the next message still has its context, so a student who asks something
+    off-topic and then returns to their real question is not starting again.
     """
     return {"messages": AIMessage(content=state["refusal"])}
 
 
-def route_scope(state: ChatState) -> str:
-    return "refuse" if state.get("refusal") else "chat_node"
+# ── Planning ──────────────────────────────────────────────────────────────────
 
 
-def chat_node(state: ChatState) -> dict:
-    messages = state["messages"]
-    context = state.get("context")
+def _call(name: str, args: dict, index: int) -> dict:
+    return {"name": name, "args": args, "id": f"auto_{index}", "type": "tool_call"}
 
-    prompt = [SYSTEM_PROMPT, SystemMessage(content=today_context())]
 
-    # Always present, not only when a question looks time-sensitive. The failure this
-    # fixes was the assistant flatly denying that a notice existed, and a question does
-    # not have to mention notices to be answered that way.
-    feed = notice_digest()
-    if feed:
-        prompt.append(SystemMessage(content=feed))
+def ensure_default_calls(calls: list[dict], state: ChatState) -> list[dict]:
+    """Everything the old unconditional pipeline guaranteed, guaranteed again.
 
-    # Resolve BS dates from both the question and the retrieved text, so the model reads
-    # off conversions instead of attempting calendar arithmetic it gets wrong.
-    dates = annotate_dates(
-        f"{state.get('question') or messages[-1].content}\n{context or ''}"
-    )
-    if dates:
-        prompt.append(SystemMessage(content=dates))
+    The model may add tools. It may not take these away. `retrieve` and `lookup_result`
+    ran on every turn before this rewrite and their detectors are unchanged -- what is
+    new is only that the model can now ask for more than the regexes found.
+    """
+    named = {c["name"] for c in calls}
+    out = list(calls)
+    raw = state.get("raw_question") or ""
+    english = state.get("question") or raw
 
-    lookup = state.get("lookup")
-    if lookup:
-        prompt.append(SystemMessage(content=lookup))
-    if context:
-        prompt.append(SystemMessage(content=f"Reference documents:\n\n{context}"))
+    if "search_documents" not in named:
+        out.append(_call("search_documents", {"query": english}, len(out)))
+    if "lookup_result" not in named and results.lookup_context(raw):
+        out.append(
+            _call(
+                "lookup_result", {"reason": "the message names a candidate"}, len(out)
+            )
+        )
+    if "fee_totals" not in named and (
+        fees.is_fee_question(raw) or fees.is_fee_question(english)
+    ):
+        out.append(_call("fee_totals", {"category": None}, len(out)))
+    if "seat_counts" not in named and (
+        seats.is_seat_question(raw) or seats.is_seat_question(english)
+    ):
+        out.append(_call("seat_counts", {"campus": "", "programme": ""}, len(out)))
+    return out
 
-    # Last, after the documents rather than before them. Placed ahead of them it was
-    # ignored: retrieval puts the raw fee tables in the same prompt, and asked for a
-    # degree total the model went back to the line items and multiplied, which is the
-    # one thing these worked figures exist to stop. Whatever is nearest the question
-    # wins with a 7B model, so the settled numbers go nearest the question.
-    fees = state.get("fees")
-    if fees:
-        prompt.append(SystemMessage(content=fees))
 
-    # rewrite_query settled what the question is: stripped of any request to answer in
-    # another language, and in English. The message the student typed stays in the
-    # transcript untouched -- only the copy the model reads is swapped.
-    asked = messages[-1].content
-    question = state.get("question") or asked
-    prompt.extend(
-        messages
-        if question == asked
-        else [*messages[:-1], HumanMessage(content=question)]
-    )
+def plan(state: ChatState) -> dict:
+    """Ask the model which sources this turn needs, then add the ones it must have."""
+    prompt: list[AnyMessage] = [SystemMessage(content=PLANNER_PROMPT)]
+    if state.get("summary"):
+        prompt.append(SystemMessage(content=CONVERSATION_HEADER + state["summary"]))
+    prompt += recent_messages(state["messages"][:-1])
+    prompt.append(HumanMessage(content=state.get("question") or ""))
+    prompt += state.get("scratch") or []
 
-    answer = model.invoke(prompt)
+    try:
+        # nostream keeps the planner's tokens out of the messages stream. It is a belt:
+        # api.py filters on node name, which is what actually guarantees it.
+        chosen = planner.invoke(prompt, config={"tags": [TAG_NOSTREAM]})
+        calls = list(chosen.tool_calls or [])
+    except Exception:  # noqa: BLE001 - a planner that cannot run falls back to the floor
+        calls = []
 
-    # api._stream has already sent this ahead of the first token; putting it on the
-    # stored message is what keeps the reloaded conversation identical to the live one.
-    preface = english_only_preface(asked)
+    if state.get("rounds", 0) == 0:
+        calls = ensure_default_calls(calls, state)
+    return {
+        "scratch": [AIMessage(content="", tool_calls=calls)],
+        "rounds": state.get("rounds", 0) + 1,
+    }
+
+
+def route_after_plan(state: ChatState) -> str:
+    last = (state.get("scratch") or [])[-1] if state.get("scratch") else None
+    return "tools" if getattr(last, "tool_calls", None) else "assemble"
+
+
+def route_after_tools(state: ChatState) -> str:
+    return "plan" if state.get("rounds", 0) < MAX_TOOL_ROUNDS else "assemble"
+
+
+# ── Answering ─────────────────────────────────────────────────────────────────
+
+
+def _pinned(blocks: dict, sources: list[dict]) -> list[dict]:
+    """Put the exact tables ahead of whatever retrieval also happened to match.
+
+    A figure taken from the fee schedule is cited to the fee schedule, whatever else was
+    in the prompt. Same for the pass list, the seat table and the priority rules: those
+    blocks are the notice's own content, so the notice is named outright rather than
+    being put to the keep_grounded test that retrieved passages face.
+    """
+    for name, source in (
+        ("lookup", RESULT_SOURCE),
+        ("fees", FEE_SOURCE),
+        ("seats", SEAT_SOURCE),
+        ("priority", PRIORITY_SOURCE),
+    ):
+        if blocks.get(name):
+            sources = [
+                source,
+                *(s for s in sources if s.get("file") != source.get("file")),
+            ]
+    return sources
+
+
+def enforce_floor(blocks: dict[str, str], state: ChatState) -> dict[str, str]:
+    """Put back any exact table the detectors called for and the tools did not deliver.
+
+    ensure_default_calls guarantees the call is *made*. That turned out not to be the
+    same as guaranteeing the block arrives, and the gap was expensive: the planner
+    emitted category="full_fee" for fee_totals, the argument failed schema validation,
+    the call errored, and the turn lost its fee figures while every other tool succeeded.
+    Nine of the suite's fifty-three cases, failing in a way that looked exactly like the
+    detector missing.
+
+    The tool arguments are tolerant now, so that particular fault is fixed at source.
+    This is the second line: whatever the model asked for and whatever the tools did,
+    a question the detectors recognise ends up with its figures. The floor is what the
+    old unconditional pipeline gave for free, and it should not be conditional on a 7B
+    model getting an argument right.
+    """
+    raw = state.get("raw_question") or ""
+    english = state.get("question") or raw
+    blocks = dict(blocks)
+
+    if not blocks.get("fees") and (
+        fees.is_fee_question(raw) or fees.is_fee_question(english)
+    ):
+        recovered = fees.fee_context(raw) or fees.fee_context(english)
+        if recovered:
+            blocks["fees"] = recovered
+
+    if not blocks.get("lookup"):
+        recovered = results.lookup_context(raw)
+        if recovered:
+            blocks["lookup"] = recovered
+
+    if not blocks.get("seats") and (
+        seats.is_seat_question(raw) or seats.is_seat_question(english)
+    ):
+        recovered = seats.seat_context(raw) or seats.seat_context(english)
+        if recovered:
+            blocks["seats"] = recovered
+
+    return blocks
+
+
+def assemble(state: ChatState) -> dict:
+    """Finish the evidence for this turn, before anything is written.
+
+    Separate from `answer` because deciding what the model will be shown and calling the
+    model are two jobs, and only the first one is worth inspecting. The eval suite stops
+    the graph here: it asserts on which evidence a turn assembled, which is deterministic
+    and takes a second, rather than on the prose, which is neither.
+    """
+    blocks = dict(state.get("blocks") or {})
+    blocks = enforce_floor(blocks, state)
+
+    if state.get("summary"):
+        blocks["summary"] = CONVERSATION_HEADER + state["summary"]
+
+    # Dates are read out of the question and whatever was retrieved, as before, so the
+    # model reads conversions rather than attempting calendar arithmetic.
+    if not blocks.get("dates"):
+        found = annotate_dates(
+            f"{state.get('question') or ''}\n{state.get('retrieved_text') or ''}"
+        )
+        if found:
+            blocks["dates"] = found
+
+    # Nothing matched. Say so rather than improvising -- this is what replaces the scope
+    # guard for a question that is real and simply unanswerable. A greeting is exempt:
+    # "thanks" needs no evidence and no apology for having none.
+    if not state.get("social") and not any(blocks.get(b) for b in EVIDENCE_BLOCKS):
+        blocks["uncovered"] = UNCOVERED_BLOCK
+
+    return {"blocks": blocks}
+
+
+def answer(state: ChatState) -> dict:
+    blocks = state.get("blocks") or {}
+
+    prompt: list[AnyMessage] = [SystemMessage(content=today_context())]
+    prompt += [SystemMessage(content=text) for text in render_blocks(blocks)]
+    # After the evidence, because SYSTEM_PROMPT opens with "Answer from the blocks
+    # above" and because the rules it carries -- never predict admission chances, never
+    # compare a rank against a seat count -- are the ones that must survive contact with
+    # a prompt that now contains real seat numbers.
+    prompt.append(SystemMessage(content=SYSTEM_PROMPT))
+
+    prompt += recent_messages(state["messages"][:-1])
+    prompt.append(HumanMessage(content=state.get("question") or ""))
+
+    written = model.invoke(prompt)
+
+    preface = english_only_preface(state.get("raw_question") or "")
     if preface:
-        answer.content = preface + (answer.content or "")
+        written.content = preface + (written.content or "")
 
-    # Citations are assembled from what retrieval placed in this prompt, then narrowed to
-    # the documents the finished answer visibly drew on. That second step is why this
-    # happens here rather than in retrieve: a question can pull good documents and still
-    # be answered with a refusal -- "How do I apply to Kathmandu University?" matches
-    # these notices closely -- and a refusal with a reading list under it is a lie about
-    # where the answer came from.
-    sources = keep_grounded(answer.content or "", question, state.get("sources") or [])
-    if state.get("lookup"):
-        # The pass list is exact and is not put to the same test: a form number was looked
-        # up in the published table, whatever the answer around it reads like. The pass
-        # list and the notice that published it are one document at one URL, so citing
-        # both would print the same notice twice, and the exact record keeps the slot.
-        sources = [
-            RESULT_SOURCE,
-            *(s for s in sources if s.get("url") != RESULT_SOURCE["url"]),
-        ]
-    if state.get("fees"):
-        # Same reasoning as the pass list: the figures came from the notice's own tables,
-        # whatever else retrieval put in the prompt, so the notice is cited outright.
-        sources = [
-            FEE_SOURCE,
-            *(s for s in sources if s.get("file") != FEE_SOURCE["file"]),
-        ]
-
-    # Attached to the message rather than to the state so they stay with the turn they
-    # belong to, and the checkpointer replays them into /api/history.
+    sources = keep_grounded(
+        written.content or "",
+        state.get("question") or "",
+        state.get("sources") or [],
+    )
+    sources = _pinned(blocks, sources)
     if sources:
-        answer.additional_kwargs["sources"] = sources[:MAX_SOURCES]
-    return {"messages": answer}
+        written.additional_kwargs["sources"] = sources[:MAX_SOURCES]
+    return {"messages": written}
 
+
+def route_after_answer(state: ChatState) -> str:
+    return (
+        "summarize"
+        if should_summarize(state["messages"], state.get("summarized_upto", 0))
+        else END
+    )
+
+
+def summarize_node(state: ChatState) -> dict:
+    """Fold the last few turns into the running summary.
+
+    After the answer, so the student has already read it -- only the SSE `done` event
+    waits on this, never the first token.
+    """
+    messages = state["messages"]
+    upto = state.get("summarized_upto", 0)
+    return {
+        "summary": summarize(state.get("summary", ""), unseen(messages, upto)),
+        "summarized_upto": len(messages),
+    }
+
+
+# ── Wiring ────────────────────────────────────────────────────────────────────
 
 graph = StateGraph(ChatState)
-
-graph.add_node("rewrite_query", rewrite_query)
-graph.add_node("retrieve", retrieve)
-graph.add_node("lookup_result", lookup_result)
+graph.add_node("prepare", prepare)
 graph.add_node("small_talk", small_talk)
-graph.add_node("guard", guard)
-graph.add_node("refuse", refuse)
-graph.add_node("chat_node", chat_node)
+graph.add_node("deflect", deflect)
+graph.add_node("plan", plan)
+graph.add_node(
+    "tools", ToolNode(TOOLS, messages_key="scratch", handle_tool_errors=True)
+)
+graph.add_node("assemble", assemble)
+graph.add_node("answer", answer)
+graph.add_node("summarize", summarize_node)
 
 graph.add_conditional_edges(
-    START,
-    route_question,
-    {"rewrite_query": "rewrite_query", "small_talk": "small_talk"},
+    START, route_question, {"prepare": "prepare", "small_talk": "small_talk"}
 )
-graph.add_edge("small_talk", "chat_node")
-graph.add_edge("rewrite_query", "retrieve")
-graph.add_edge("retrieve", "lookup_result")
-graph.add_edge("lookup_result", "guard")
+graph.add_edge("small_talk", "assemble")
 graph.add_conditional_edges(
-    "guard", route_scope, {"refuse": "refuse", "chat_node": "chat_node"}
+    "prepare", route_after_prepare, {"deflect": "deflect", "plan": "plan"}
 )
-graph.add_edge("refuse", END)
-graph.add_edge("chat_node", END)
+graph.add_edge("deflect", END)
+graph.add_conditional_edges(
+    "plan", route_after_plan, {"tools": "tools", "assemble": "assemble"}
+)
+graph.add_conditional_edges(
+    "tools", route_after_tools, {"plan": "plan", "assemble": "assemble"}
+)
+graph.add_conditional_edges(
+    "answer", route_after_answer, {"summarize": "summarize", END: END}
+)
+graph.add_edge("assemble", "answer")
+graph.add_edge("summarize", END)
 
 
-# Checkpoints live in the same SQLite file as the conversation index, on the same volume
-# as the notice cache. The earlier in-memory saver was fine while a conversation lasted
-# one page visit, but the history sidebar promises a conversation is still there
-# tomorrow, and a restart would otherwise leave the sidebar listing threads whose
-# messages no longer exist.
+# Checkpoints live in the same SQLite file as the conversation index. Unchanged from
+# before the rewrite, including why it is not built at import: AsyncSqliteSaver binds to
+# the running event loop in its constructor, and at import time there isn't one.
 _lock = asyncio.Lock()
 _chatbot = None
 
 
 async def get_chatbot():
-    """The compiled graph, built on first use.
-
-    Not built at import: AsyncSqliteSaver binds itself to the running event loop in its
-    constructor, and at import time there isn't one. The lock makes the two requests that
-    can arrive together during startup share a single connection rather than race to open
-    two against the same file.
-    """
+    """The compiled graph, built on first use."""
     global _chatbot
     if _chatbot is None:
         async with _lock:

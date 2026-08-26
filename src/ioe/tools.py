@@ -24,7 +24,7 @@ Two further consequences worth naming:
   `results.lookup_context` that reads them today.
 """
 
-from typing import Annotated, Literal
+from typing import Annotated
 
 from langchain_core.messages import ToolMessage
 from langchain_core.tools import InjectedToolCallId, tool
@@ -82,6 +82,34 @@ def render_blocks(blocks: dict[str, str]) -> list[str]:
     return [blocks[name] for name in BLOCK_ORDER if blocks.get(name)]
 
 
+def _category(value: str | None) -> str | None:
+    """The model's category argument, mapped onto a real one, or None.
+
+    Never raises and never rejects. Declared as a Literal enum, this argument produced
+    ToolInvocationError on a third of the fee questions in the suite: qwen2.5:7b emits
+    "" and "full_fee" as readily as "Full Fee", the call fails schema validation, and the
+    turn loses its fee figures while every other tool succeeds -- a silent, partial
+    failure that looks like the detector missing.
+
+    Which is the point made at the top of this file and then not applied here: a tool
+    argument from a 7B model is a hint. The figures come from the student's own words
+    either way, so an argument this tool cannot read is worth nothing and must cost
+    nothing.
+    """
+    if not value:
+        return None
+    want = value.strip().replace("_", " ").replace("-", " ").casefold()
+    for category in fees.CATEGORIES:
+        if category.casefold() == want:
+            return category
+    for category in fees.CATEGORIES:
+        if want and (
+            want in category.casefold() or category.casefold().startswith(want)
+        ):
+            return category
+    return None
+
+
 def _done(tool_call_id: str, note: str, **update) -> Command:
     """A finished tool call: a short note for the planner, and blocks for the answer.
 
@@ -99,8 +127,9 @@ def _done(tool_call_id: str, note: str, **update) -> Command:
 
 @tool
 def search_documents(
-    query: str,
-    tool_call_id: Annotated[str, InjectedToolCallId],
+    query: str = "",
+    state: Annotated[dict | None, InjectedState] = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = "",
 ) -> Command:
     """Search the official IOE admission notices, the admission booklet and the entrance
     syllabus for passages that answer a question.
@@ -111,6 +140,12 @@ def search_documents(
     what the student is referring to from the conversation, so that a follow-up like
     "what about for them?" becomes something a document search can match.
     """
+    query = (
+        query
+        or (state or {}).get("question")
+        or (state or {}).get("raw_question")
+        or ""
+    )
     try:
         hits = get_store().similarity_search_with_relevance_scores(query, k=TOP_K * 2)
     except Exception:  # noqa: BLE001 - an unbuilt index yields no context, never a 500
@@ -130,9 +165,9 @@ def search_documents(
 
 @tool
 def lookup_result(
-    reason: str,
-    state: Annotated[dict, InjectedState],
-    tool_call_id: Annotated[str, InjectedToolCallId],
+    reason: str = "",
+    state: Annotated[dict | None, InjectedState] = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = "",
 ) -> Command:
     """Look a candidate up in the published entrance pass list.
 
@@ -156,22 +191,24 @@ def lookup_result(
 
 @tool
 def fee_totals(
-    category: Literal["Regular", "Full Fee", "Foreign Student", "Sponsored"] | None,
-    state: Annotated[dict, InjectedState],
-    tool_call_id: Annotated[str, InjectedToolCallId],
+    category: str = "",
+    state: Annotated[dict | None, InjectedState] = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = "",
 ) -> Command:
     """Worked-out fees for studying at Pulchowk Campus: one semester, the whole degree,
     what is due on admission day, and the refundable deposits (धरौती).
 
-    Use this for what it costs to study. Leave `category` empty unless the student has
-    said which they are -- the block then quotes the Regular rate and says so.
+    Use this for what it costs to study. Pass `category` only if the student has said
+    which they are, and pass it exactly as one of: Regular, Full Fee, Foreign Student,
+    Sponsored. Leave it empty otherwise -- the block then quotes the Regular rate and
+    says so.
 
     Do NOT use this for the entrance examination fee or the application form fee. Those
     are different money, answered by the payment notices through search_documents.
     """
-    raw = state.get("raw_question") or ""
-    english = state.get("question") or ""
-    named = " ".join(filter(None, [raw, english, category or ""]))
+    raw = (state or {}).get("raw_question") or ""
+    english = (state or {}).get("question") or ""
+    named = " ".join(filter(None, [raw, english, _category(category) or ""]))
     block = (
         fees.fee_context(raw)
         or fees.fee_context(english)
@@ -188,10 +225,10 @@ def fee_totals(
 
 @tool
 def seat_counts(
-    campus: str,
-    programme: str,
-    state: Annotated[dict, InjectedState],
-    tool_call_id: Annotated[str, InjectedToolCallId],
+    campus: str = "",
+    programme: str = "",
+    state: Annotated[dict | None, InjectedState] = None,
+    tool_call_id: Annotated[str, InjectedToolCallId] = "",
 ) -> Command:
     """How many students each campus and affiliated college admits, per programme,
     split into Regular and Full Fee.
@@ -203,14 +240,16 @@ def seat_counts(
     These are intake targets. They cannot say whether a rank is good enough for a
     programme, and this tool will not answer that.
     """
-    raw = state.get("raw_question") or ""
+    raw = (state or {}).get("raw_question") or ""
     asked = " ".join(filter(None, [raw, campus, programme]))
     block = seats.seat_context(asked, force=True)
     return _done(tool_call_id, "Seat figures assembled.", blocks={"seats": block})
 
 
 @tool
-def priority_rules(tool_call_id: Annotated[str, InjectedToolCallId]) -> Command:
+def priority_rules(
+    tool_call_id: Annotated[str, InjectedToolCallId] = "",
+) -> Command:
     """Pulchowk's rules for ranking programme priorities on the admission form.
 
     Use this for how the priority order works, what happens when a student is published
@@ -228,8 +267,8 @@ def priority_rules(tool_call_id: Annotated[str, InjectedToolCallId]) -> Command:
 
 @tool
 def convert_bs_date(
-    bs_date: str,
-    tool_call_id: Annotated[str, InjectedToolCallId],
+    bs_date: str = "",
+    tool_call_id: Annotated[str, InjectedToolCallId] = "",
 ) -> Command:
     """Convert a Bikram Sambat date to the Gregorian calendar and say how far off it is.
 
@@ -243,7 +282,9 @@ def convert_bs_date(
 
 
 @tool
-def latest_notices(tool_call_id: Annotated[str, InjectedToolCallId]) -> Command:
+def latest_notices(
+    tool_call_id: Annotated[str, InjectedToolCallId] = "",
+) -> Command:
     """The most recent notices published on the official IOE and campus sites.
 
     Use this when the student asks whether something has been published, whether there is

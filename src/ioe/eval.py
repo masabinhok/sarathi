@@ -36,11 +36,18 @@ FEES = "fees"
 SEATS = "seats"
 PRIORITY = "priority"
 NOTICES = "notices"
-# "The app did not answer the question on its merits." Today that is the guard writing a
-# refusal; after the rewrite it is the uncovered block, or the task-substitution
-# detector. One name for it, so a case does not have to know which graph it is running
-# against -- which is the whole point of keeping this suite across the rewrite.
+# Two different things, and collapsing them cost a false failure.
+#
+# DECLINED is the app refusing to act: the task-substitution detector, or the old graph's
+# scope guard. No model call, the app's own sentence, nothing answered.
+#
+# UNCOVERED is "no source matched", which is a fact about the evidence and not a refusal.
+# The turn still gets a real answer -- from the conversation, if that is what was asked
+# about. Measured: after three turns about the entrance fee, "what did i just ask you
+# about?" assembles no evidence, carries the uncovered block, and is answered correctly
+# with "You asked about how to pay the IOE Entrance Exam fee."
 DECLINED = "declined"
+UNCOVERED = "uncovered"
 TIMEOUT = "TIMED-OUT"
 
 
@@ -56,10 +63,6 @@ def evidence(state: dict) -> set[str]:
     blocks = state.get("blocks")
     if isinstance(blocks, dict):
         found = {name for name, text in blocks.items() if text}
-        # Neither of these is evidence. Both mean the app declined to answer.
-        if found & {"uncovered", "deflected"}:
-            found -= {"uncovered", "deflected"}
-            found.add(DECLINED)
     else:
         found = set()
         if state.get("context"):
@@ -143,8 +146,8 @@ CASES: list[tuple[str, str, set[str], set[str]]] = [
     # need history are in CONVERSATIONS, which is where issue 24 says they belong.
     ("scope", "write me a python function to reverse a list", {DECLINED}, set()),
     ("scope", "who won the world cup", {DECLINED}, set()),
-    ("scope", "lets go on a holiday", {DECLINED}, set()),
-    ("scope", "how do i apply to Kathmandu University", {DECLINED}, set()),
+    ("scope", "lets go on a holiday", {UNCOVERED}, {DECLINED}),
+    ("scope", "how do i apply to Kathmandu University", {UNCOVERED}, {DECLINED}),
     ("scope", "solve x^2 + 5x + 6 = 0", {DECLINED}, set()),
     ("scope", "recommend a good laptop under 80000", {DECLINED}, set()),
     # Real questions that issue 22 records the classifier getting wrong on its own.
@@ -174,7 +177,7 @@ CONVERSATIONS: list[tuple[str, list[tuple[str, set[str], set[str]]]]] = [
             ),
             # IOE runs BE and BArch. The documents do not cover "other categories", and
             # saying so is the answer -- inventing BBA and PhD programmes is the bug.
-            ("and what other cateogry i could study in", {DECLINED}, set()),
+            ("and what other cateogry i could study in", {UNCOVERED}, {DECLINED}),
             ("what is its source", set(), {DECLINED}),
             ("foreign?", {FEES}, {DECLINED}),
         ],
@@ -185,7 +188,7 @@ CONVERSATIONS: list[tuple[str, list[tuple[str, set[str], set[str]]]]] = [
             ("what is the entrance exam fee", {DOCUMENTS}, {DECLINED}),
             ("how do i pay it?", {DOCUMENTS}, {DECLINED}),
             ("and the deadline?", set(), {DECLINED}),
-            ("what did i just ask you about?", set(), {DECLINED}),
+            ("what did i just ask you about?", set(), {DECLINED}),  # UNCOVERED is fine
         ],
     ),
     (

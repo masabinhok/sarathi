@@ -78,3 +78,42 @@ def is_task_substitution(text: str) -> bool:
     and gets a real reply that stays in the conversation.
     """
     return bool(_TASK_SUBSTITUTION.search(text))
+
+
+# ── Turns that need no documents ──────────────────────────────────────────────
+# "thanks" was costing more than a real question. The planner is asked to resolve what a
+# short message refers to, and a greeting refers to nothing, so it borrows the previous
+# subject: before this check existed, "thanks" became the search "IOE admission exam
+# date 2083" and pulled 6.2 KB of exam-date documents into the prompt before the model
+# could say "you're welcome". Measured on the running app, one such turn spent ~0.7s
+# planning and ~0.5s embedding to assemble context the answer could not use.
+#
+# So a turn that is only a greeting, a thank-you, or an acknowledgement is routed
+# straight to the answer, with no planner call and no tools. The test is a whole-message match against a fixed vocabulary,
+# not a judgement: anything with a question attached ("thanks, what about BArch?")
+# fails it and takes the ordinary path, because the cost of skipping retrieval on a
+# real question is an ungrounded answer, and the cost of not skipping it on a greeting
+# is a second of latency.
+#
+# Deliberately absent: "yes", "no", "sure". They read like small talk but they are
+# often the answer to something the assistant asked, and that turn may well need the
+# documents the question was about.
+_SMALL_TALK = re.compile(
+    r"^\W*(?:"
+    r"h+i+|h+e+y+|h+e+l+o+|hello|hiya|yo|namaste|namaskar|"
+    r"good\s+(?:morning|afternoon|evening|day)|good\s?night|"
+    r"thanks?|thank\s+you(?:\s+so\s+much|\s+very\s+much)?|thx|tysm|ty|"
+    r"ok(?:ay)?|k|cool|nice|great|awesome|perfect|got\s+it|understood|alright|all\s+right|"
+    r"bye|goodbye|see\s+you|"
+    r"how\s+are\s+you(?:\s+doing)?|what'?s\s+up|sup|"
+    r"who\s+are\s+you|what\s+can\s+you\s+do"
+    r")"
+    r"(?:\W+(?:there|again|sarathi|bro|sir|maam|ma'?am|dai|friend|buddy|man|guys?|"
+    r"a\s+lot|so\s+much|very\s+much))*\W*$",
+    re.IGNORECASE,
+)
+
+
+def is_small_talk(text: str) -> bool:
+    """Whether the message is social in its entirety and needs no documents."""
+    return bool(_SMALL_TALK.match(text.strip()))

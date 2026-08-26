@@ -87,9 +87,15 @@ Updated summary:"""
 # the conversation, so the next message still has its context.
 UNCOVERED_BLOCK = """[No source matched this question.]
 Nothing in the IOE notices, booklet, syllabus, pass list or fee schedule answers what \
-was asked. Say that in a sentence -- that IOE's published materials do not cover it -- \
-and then say what you can help with. Do not answer it from your own knowledge of IOE or \
-of anything else, and do not guess at what IOE might offer. If the question was about a \
+was asked.
+
+If the student is asking about this conversation itself -- what they just asked, what \
+you said, whether you remember something -- answer from the conversation. It is above \
+you and it needs no source.
+
+Otherwise say in a sentence that IOE's published materials do not cover this, and then \
+say what you can help with. Do not answer it from your own knowledge of IOE or of \
+anything else, and do not guess at what IOE might offer. If the question was about a \
 programme, a university or a subject, the honest answer is usually that this is not \
 something IOE's admission materials describe."""
 

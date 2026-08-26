@@ -11,7 +11,7 @@ the open list and take the next free number.
 | `BUILT` | A question that turned into a feature; the decision record is kept with it. |
 | `SATISFIED` | Good enough; not being chased further. |
 
-### Open — 7
+### Open — 6
 
 | # | Issue | Area |
 | --- | --- | --- |
@@ -20,10 +20,9 @@ the open list and take the next free number.
 | [9](#9--guide-the-bot-to-answer-smartly) | Guide the bot to answer smartly | prompt / graph |
 | [10](#10--play-with-the-bot-and-fix-what-breaks) | Play with the bot and fix what breaks | prompt / graph |
 | [24](#24-answering-scope) | Answering scope | prompt / graph |
-| [25](#25-supervisor-queries) | Supervisor queries | feature |
 | [26](#26-my-query) | Simplify onto a tool-calling agent | architecture |
 
-### Closed — 20
+### Closed — 21
 
 | # | Issue | Status |
 | --- | --- | --- |
@@ -44,6 +43,7 @@ the open list and take the next free number.
 | [19](#19--fixed--it-answers-in-hindi-when-asked-for-nepali) | It answers in Hindi when asked for Nepali | `FIXED` |
 | [20](#20--fixed--the-theme-colour-barely-shows) | The theme colour barely shows | `FIXED` |
 | [21](#21--fixed--the-pass-list-lookup-only-took-a-form-number-or-a-rank) | The pass list lookup only took a form number or a rank | `FIXED` |
+| [25](#25--built--supervisor-queries) | Supervisor queries | `BUILT` |
 | [22](#22--fixed--it-answers-questions-outside-its-scope-and-then-loses-the-thread) | It answers questions outside its scope, and then loses the thread | `FIXED` |
 | [23](#23--fixed--it-gets-the-fee-arithmetic-wrong) | It gets the fee arithmetic wrong | `FIXED` |
 | [27](#27--fixed--the-model-never-saw-its-own-system-prompt) | The model never saw its own system prompt | `FIXED` |
@@ -652,9 +652,53 @@ I only handle questions about IOE admissions and the IOE entrance exam, so I hav
 ```
 look at the above convo, first it answered wronlgy that ioe teaches all those, i guess TU teaches it. next it still rejects the foreign? because its out of scope it has not continuation context. i think we should not refuse anything, we should restructure the prompt from scratch: strcitly answer in english. strictly answer questions grounded in docuemnts provided, to any context as much as possible, have continuation context, and only refuse if no docuemnts could answer the relecant txt based on conversation context. we should apply short term memory, long term memoery concepts. and feed back the summary of the convo, is the context window is having some issues. also the system prompts are too long and are so ineffective. we should optimize them to make the bot robust
 
-## 25. supervisor queries
+## 25 · `BUILT` · Supervisor queries
 he wants to add feature of seat probability based on rank, previous year cutoff marks. current priority list scanning and then estimating probability of getting the subject chosen based on number of seats available, same sub chosen by higher rankers(1 being the highgest)
-ioe booklet feeding, seat details of all affiliated campusses and the courses offered. 
+ioe booklet feeding, seat details of all affiliated campusses and the courses offered.
+
+**Built 2026-08-25 — Pulchowk only.**
+
+It isn't a probability. IOE admits by a single deterministic rule — walk the merit list
+from rank 1 and place each applicant in the highest priority on their own form that still
+has a seat. Given last year's priority forms and the seat counts, last year's outcome is
+fixed, and so is every programme's cutoff: the worst rank admitted. A probability model
+would invent uncertainty the process does not have. What a student actually needs is last
+year's cutoff, stated as last year's — so that is what `priority.py` computes.
+
+**Data.** `docs/data/pulchowk_priority_2083.csv` — 1,700 rows read from the published
+Pulchowk priority-applicants PDF (S.N. 1–1700 contiguous, so nothing was dropped in
+extraction): each applicant's rank and ordered programme codes. Seat counts are booklet
+§2.7 (Pulchowk Reg/Full). The module runs the serial-dictatorship simulation once and
+caches the per-programme cutoffs.
+
+The 2083 cutoffs it produces match what everyone already knows about Pulchowk — Computer
+Regular tightest at rank 55, then Electronics 110, Electrical 301, Mechanical 369, Civil
+439 — which is the check that the simulation is doing the real thing, not something
+plausible-looking.
+
+**Shape.** Two question types, both read off the raw message like the pass-list lookup:
+"I'm rank N, which priorities and in what order" and "with rank N, is programme X
+realistic". A `priority` field is set in `lookup_result`; it bypasses the scope guard the
+same way an exact lookup does, and it suppresses the pass-list rank lookup on that turn —
+the rank is the student's own, hypothetical, and looking it up would print an unrelated
+candidate's name and district.
+
+**The guardrail was reversed, narrowly.** The prompt used to forbid every cutoff outright
+("you have no cutoff data"). Now the one source of cutoffs it may quote is this block, and
+only ever as last year's — never a guarantee, never "you are safe for X", never a figure
+for a programme or campus the block did not give it. Decided with the maintainer:
+historical framing only.
+
+**Left for later:**
+
+- Other campuses. Only Pulchowk (and Pashchimanchal, whose form is downloaded but not yet
+  parsed) publish a priority list; Thapathali, Purwanchal, Chitwan and the affiliated
+  colleges would each need their own. The supervisor asked for "all affiliated campuses";
+  this is the first.
+- One year of data. "History" is 2083 alone, and the framing says so.
+- Quota carve-outs (women's 10%, inclusive 20% of Regular) are folded into the merit pool
+  rather than modelled separately, so an open-category cutoff is approximate — good enough
+  for guidance, not to be published as an exact figure.
 
 ## 26. my query
 i think the app has become quite complex with a lot of iterative additions. could not the same functionality achieved through simple patterns/code. how about we shift to langgraph chatbot with tool calling only when necessary with rag as a tool, you can oppose with strict facts and why not. but i want to simplify the codebase, optimize. is gemma a better model? how about we test the tool calling abitlity of local models. i guess, our chatbot using suitable tools like date tool, result_lookup tool, fee_Calc_tool, priority_rank_tool. and many others, and use only when necessary otherwise go through a normal ragbot loop. 

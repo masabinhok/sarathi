@@ -450,21 +450,27 @@ def format_district_lookup(district: str) -> str:
     )
 
 
-def lookup_context(text: str, limit: int = 3) -> str:
+def lookup_context(text: str, limit: int = 3, skip_ranks: bool = False) -> str:
     """Context for every form number, merit rank, name, and district in the question,
     or "" if none. Name and district lookups are answered against the raw question --
     same as form number and rank, and for the same reason: a rewrite or a translation
     goes through the model, and a name that survives a paraphrase may not survive it
-    verbatim."""
+    verbatim.
+
+    skip_ranks is set when a priority question already claimed the rank in the message.
+    There the number is the student's own rank, stated hypothetically -- looking it up
+    would answer a question nobody asked with an unrelated candidate's name and district.
+    """
     district = find_district(text)
     blocks = [format_lookup(n) for n in find_form_numbers(text)[:limit]]
     # A district in play turns off the topper heuristic: "who topped from Mustang" is
     # answered by the district block below, and the global rank 1 is a different
     # person -- see find_ranks.
-    blocks += [
-        format_rank_lookup(r)
-        for r in find_ranks(text, include_topper=district is None)[:limit]
-    ]
+    if not skip_ranks:
+        blocks += [
+            format_rank_lookup(r)
+            for r in find_ranks(text, include_topper=district is None)[:limit]
+        ]
 
     matches = find_name_matches(text)
     full_matches = [key for kind, key in matches if kind == "full"][:limit]

@@ -241,7 +241,13 @@ _PRIORITY_INTENT_RE = re.compile(
     r"\bwhich\s+(?:program\w*|branch\w*|subject\w*|faculty|stream|course|department)\b|"
     r"\bwhat\s+(?:program\w*|branch\w*|subject\w*|faculty|stream|course|department)\b|"
     r"\bget\s+into\b|\b(?:will|can|could|would)\s+i\s+get\b|\bchanc\w*\b|"
-    r"\bsafe\b|\bfirst\s+(?:choice|priority)\b|\bin\s+what\s+order\b|\border\s+of\b",
+    r"\bsafe\b|\bfirst\s+(?:choice|priority)\b|\bin\s+what\s+order\b|\border\s+of\b|"
+    # "what should I put first" is the question this whole module exists to answer and it
+    # matched none of the above -- no programme named, and "first" not followed by
+    # "choice" or "priority". Found by checking what the app's own example questions
+    # actually fire.
+    r"\b(?:put|list|rank|place|pick|select)\b[^.?!]{0,30}\bfirst\b|"
+    r"\bwhat\s+should\s+i\s+(?:put|choose|pick|list|go\s+for)\b",
     re.IGNORECASE,
 )
 

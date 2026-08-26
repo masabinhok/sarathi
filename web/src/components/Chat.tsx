@@ -11,12 +11,16 @@ import {
 } from "@/lib/api";
 
 // Phrased the way a student actually asks, and each one exercises a different path:
-// retrieval, the pass list, the date logic, the payment guides.
+// the priority allocation, the seat tables, the pass list, the worked fee totals. They
+// are here to show what this can do that a search box cannot, so each one is a question
+// that needs a computation rather than a passage -- and each was checked against the
+// detectors, because a suggested question that lands in generic retrieval advertises
+// nothing.
 const CHIPS = [
-  "What's on the entrance syllabus?",
+  "With rank 500, what should I put first at Pulchowk?",
+  "How many computer engineering seats does Pulchowk have?",
   "Did form 2083-4001 pass?",
-  "Has the quota deadline passed?",
-  "How do I pay the fee with eSewa?",
+  "What does the whole degree cost at full fee?",
 ];
 
 type Props = {

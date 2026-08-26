@@ -114,7 +114,7 @@ export default function Hero() {
           <input
             value={question}
             onChange={(event) => setQuestion(event.target.value)}
-            placeholder="Has the quota deadline passed?"
+            placeholder="What was the cutoff for Civil at Thapathali?"
             aria-label="Your question"
             className="field text-ink placeholder:text-faint min-w-0 flex-1 bg-transparent text-[0.9375rem] outline-none"
           />

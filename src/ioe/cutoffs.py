@@ -278,7 +278,19 @@ def reachable_context(rank: int, category: str = "Regular") -> str:
 
 
 def _trend(recorded: dict[str, int]) -> str:
-    return "  ".join(f"{year}: {rank}" for year, rank in recorded.items())
+    """The history, newest first, with the newest figure also stated on its own.
+
+    Written as one pair per line rather than a run of "2082: 387  2081: 278  2080: 273",
+    and with the headline repeated above it. Observed once: asked for Thapathali Civil,
+    the model read that run and answered "367 in 2083" -- a digit and a year both wrong,
+    out of a block that was correct. The same discipline as priority.format_rank_guidance:
+    state the figure that answers the question rather than leaving it to be picked out.
+    """
+    newest = next(iter(recorded))
+    lines = "\n".join(f"    {year}: {rank}" for year, rank in recorded.items())
+    return (
+        f"Most recent ({newest}): {recorded[newest]}\n  Every recorded year:\n{lines}"
+    )
 
 
 def history_context(campus: str, programme: str, category: str = "Regular") -> str:

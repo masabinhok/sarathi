@@ -11,6 +11,7 @@ from langgraph.graph.message import MessagesState
 from ioe.dates import annotate_dates, today_context
 from ioe.fees import FEE_SOURCE, fee_context
 from ioe.notices import digest as notice_digest
+from ioe.priority import PRIORITY_SOURCE, priority_context
 from ioe.rag import (
     MAX_SOURCES,
     NUM_CTX,
@@ -63,6 +64,27 @@ Using a pass list lookup:
 - When a block says a name matched but not the district the student gave, say exactly that -- it is not evidence the candidate never sat the exam, only that this particular record does not carry that district. Do not treat it as a "not found".
 - A district lookup names only the best-ranked candidates from that district, and says so. Never imply the ones shown are the only candidates from there.
 
+Using a Pulchowk priority analysis:
+- A "Pulchowk priority analysis" block below reports, for a rank the student gave, which \
+Pulchowk programmes that rank would and would not have been admitted to **last year \
+(2083)**, worked out by simulating the published priority applications. It exists because \
+IOE admits in merit-rank order into each applicant's highest still-open priority, so last \
+year's forms fix last year's cutoffs exactly.
+- Every figure in the block is last year's and must be given as last year's -- "in 2083, \
+the last rank admitted to Computer Regular was 55", never "you will get Computer" or "you \
+are safe for Computer". Say clearly that cutoffs move each year with the applicant pool \
+and the number of seats, so this is guidance for choosing priorities, not a prediction of \
+this year's result.
+- Restate the block as ordinary sentences. Do not copy its bracketed header or field \
+labels, and do not invent a cutoff for any programme the block did not give you.
+- This data is Pulchowk only. If the block is absent, or the student asks about another \
+campus, say you can only do this for Pulchowk and point them to the published results and \
+the campus admission office; do not estimate.
+- Pass on the block's advice on ordering: the student should list programmes in their own \
+genuine order of preference and include only ones they would actually accept, because \
+being published in a programme forces them to take that seat to stay eligible for a higher \
+one. Never tell them to place an unwanted programme above a wanted one to "play it safe".
+
 Using the reference documents:
 - Reference documents may be supplied below under "Reference documents". When they \
 are, answer from them rather than from memory, and name the source you used.
@@ -113,8 +135,8 @@ Rules:
 - Never invent year-specific facts. Exam dates, deadlines, fees, seat counts, cutoff \
 marks, and results change every year. If you are not certain, say so plainly rather \
 than guessing.
-- Never predict a student's chance of admission, and never state a cutoff rank or cutoff mark for a campus or program. You have no cutoff data. If asked, say so directly, and point them to the published results and their campus admission office rather than offering an estimate.
-- A seat count is not a rank threshold. Never compare a student's rank against a number of seats, and never tell a student their rank falls within, qualifies for, is safe for, or is close to a program. Seat totals in these documents say how many students a campus takes, not how far down the merit list it reaches.
+- Never guarantee a student a seat, and never predict this year's cutoff. The only cutoff figures you may give are those in a "Pulchowk priority analysis" block, and only ever as last year's result, never as a promise for this year. Without such a block you have no cutoff data: say so, and point the student to the published results and their campus admission office rather than estimating. Never invent a cutoff, and never state one for a campus or programme the block did not give you.
+- A seat count is not a rank threshold. Never derive a cutoff yourself by comparing a rank against a number of seats -- judge whether a rank cleared a programme only from a priority-analysis block, never from the seat totals in the booklet. Seat totals say how many students a campus takes, not how far down the merit list it reaches.
 - Distinguish clearly between stable facts about the process and details a student must \
 verify for their own admission year.
 - Be clear, direct, and encouraging. Students asking these questions are often anxious, \
@@ -147,6 +169,9 @@ class ChatState(MessagesState):
     # Fee totals worked out in full, so the model reads them instead of doing the
     # arithmetic that it got wrong every time it was asked.
     fees: str
+    # Last year's Pulchowk cutoffs for a "which priority, at my rank?" question, worked
+    # out by simulation so the model reads them off instead of guessing a threshold.
+    priority: str
     sources: list[dict]
     # The refusal the guard wrote if it turned the question away, or "".
     refusal: str
@@ -397,6 +422,7 @@ def small_talk(state: ChatState) -> dict:
         "context": "",
         "lookup": "",
         "fees": "",
+        "priority": "",
         "sources": [],
         "refusal": "",
     }
@@ -415,14 +441,19 @@ def lookup_result(state: ChatState) -> dict:
     """Answer from the exact tables -- the pass list and the fee schedule -- rather than
     leaving either to retrieval and arithmetic."""
     asked = state["messages"][-1].content
+    # A priority question carries the student's own rank, stated hypothetically. Read it
+    # first so the pass-list lookup can be told to skip it: looking that rank up would
+    # answer with an unrelated candidate's name and district, which the student did not ask
+    # for and which is not theirs.
+    priority = priority_context(asked)
     # The raw message, not the rewritten or translated one: both of those go through the
     # model, and a form number that survives a paraphrase may not survive a translation.
-    lookup = lookup_context(asked)
+    lookup = lookup_context(asked, skip_ranks=bool(priority))
     # Fees are the other way round. There is no exact token to preserve, and the rewrite
     # is a translation into English, so a question asked in Nepali is recognised there
     # and not in the original. Both are read, and the first that matches wins.
     fees = fee_context(asked) or fee_context(state.get("question") or "")
-    return {"lookup": lookup, "fees": fees}
+    return {"lookup": lookup, "fees": fees, "priority": priority}
 
 
 # ── Keeping to the subject ────────────────────────────────────────────────────
@@ -537,7 +568,7 @@ def best_match(question: str) -> float:
 
 def guard(state: ChatState) -> dict:
     """Decide whether this question is answered at all."""
-    if state.get("lookup") or state.get("fees"):
+    if state.get("lookup") or state.get("fees") or state.get("priority"):
         return {"refusal": ""}
     messages = state["messages"]
     question = state.get("question") or messages[-1].content
@@ -597,6 +628,14 @@ def chat_node(state: ChatState) -> dict:
     if fees:
         prompt.append(SystemMessage(content=fees))
 
+    # Nearest the question, for the same reason as the fees: retrieval also puts the
+    # booklet's raw seat targets in the prompt, and a cutoff worked out by simulation must
+    # win over the model deriving its own from a seat count -- the mistake the analysis
+    # exists to prevent.
+    priority = state.get("priority")
+    if priority:
+        prompt.append(SystemMessage(content=priority))
+
     # rewrite_query settled what the question is: stripped of any request to answer in
     # another language, and in English. The message the student typed stays in the
     # transcript untouched -- only the copy the model reads is swapped.
@@ -638,6 +677,14 @@ def chat_node(state: ChatState) -> dict:
         sources = [
             FEE_SOURCE,
             *(s for s in sources if s.get("file") != FEE_SOURCE["file"]),
+        ]
+    if state.get("priority"):
+        # The cutoffs are computed from the published priority list and the booklet's seat
+        # targets, not from whatever retrieval happened to pull, so the analysis is cited
+        # in its own right and takes the slot ahead of any duplicate booklet chunk.
+        sources = [
+            PRIORITY_SOURCE,
+            *(s for s in sources if s.get("file") != PRIORITY_SOURCE["file"]),
         ]
 
     # Attached to the message rather than to the state so they stay with the turn they

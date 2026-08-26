@@ -15,6 +15,8 @@ models run on your own machine through Ollama.
 src/ioe/graph.py      LangGraph graph: query rewrite -> retrieve -> lookup -> answer
 src/ioe/rag.py        document loading, chunking, Chroma index, retrieval + reranking
 src/ioe/results.py    exact lookup over the published entrance pass list
+src/ioe/fees.py       fee totals worked out from the published fee tables
+src/ioe/priority.py   last year's Pulchowk cutoffs, simulated from the priority list
 src/ioe/dates.py      current date in BS/AD, Bikram Sambat conversion
 src/ioe/deadlines.py  dated obligations mined from the indexed documents
 src/ioe/notices.py    scraper for IOE / TU / campus notice boards

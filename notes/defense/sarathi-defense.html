@@ -350,7 +350,68 @@ ul.ruled .lbl.warn { color: var(--crimson); }
 .deck-viewport:hover .deck-controls { opacity: 1; }
 .deck-controls button {
     background: none; border: 0; color: inherit; font: inherit; cursor: pointer; padding: 0 4px;
+    transition: color .15s ease, transform .15s ease;
 }
+.deck-controls button:hover { color: var(--paper); transform: scale(1.15); }
+
+/* ===========================================
+   MICRO-INTERACTIONS
+   Restrained on purpose — this is a defense, not a pitch deck. Hover states
+   confirm what's already true rather than decorating: the lapis-tinted
+   elements are the ones the app itself computed or fixed, so touching them
+   is the only thing that responds.
+   =========================================== */
+ul.ruled li {
+    transition: background-color .18s ease, padding-left .18s ease;
+    position: relative;
+}
+ul.ruled li::before {
+    content: ""; position: absolute; left: -14px; top: 0; bottom: 0; width: 3px;
+    background: var(--lapis); transform: scaleY(0); transition: transform .18s ease;
+    transform-origin: center;
+}
+ul.ruled li:hover { background: var(--lapis-soft); padding-left: 14px; }
+ul.ruled li:hover::before { transform: scaleY(1); }
+ul.ruled li.warn:hover { background: var(--crimson-soft); }
+ul.ruled li.warn:hover::before { background: var(--crimson); }
+
+.fig {
+    transition: color .15s ease, transform .15s ease;
+    display: inline-block;
+}
+.fig:hover { color: var(--crimson); transform: scale(1.06); cursor: default; }
+
+table.ev tr { transition: background-color .15s ease; }
+table.ev tr:hover td { background: var(--lapis-soft); }
+table.ev tr.miss:hover td { background: var(--crimson-soft); }
+
+.node, .pstep {
+    transition: background-color .18s ease, border-color .18s ease, transform .18s ease;
+}
+.node:hover, .pstep:hover { background: var(--lapis-soft); border-color: var(--lapis); transform: translateY(-2px); }
+.node.term:hover { background: transparent; transform: none; }
+
+.demo-q { transition: background-color .18s ease, padding-left .18s ease; cursor: default; }
+.demo-q:hover { background: var(--lapis-soft); padding-left: 10px; }
+.demo-q:hover span { color: var(--crimson); }
+
+.rp { transition: transform .2s ease, border-color .2s ease; cursor: default; }
+.rp:hover { transform: translateY(-4px); border-color: var(--lapis); }
+
+.claims div { transition: background-color .18s ease; }
+.claims div:hover { background: var(--lapis-soft); }
+
+/* === PROGRESS RULE === thin lapis line at the very bottom of the viewport,
+   the same 2px weight as the masthead rule, filling with the deck's position. */
+.deck-progress {
+    position: fixed; left: 0; right: 0; bottom: 0; height: 2px;
+    background: rgba(252,252,252,.12); z-index: 1000;
+}
+.deck-progress-bar {
+    height: 100%; width: 0; background: var(--lapis);
+    transition: width .35s cubic-bezier(.2,.72,.2,1);
+}
+
 #editBadge {
     position: fixed; top: 14px; left: 14px; z-index: 1001; font-family: var(--mono); font-size: 11px;
     letter-spacing: .14em; text-transform: uppercase; color: var(--paper);
@@ -578,22 +639,22 @@ body.editing [contenteditable="true"]:focus { outline: 2px solid var(--lapis); o
 <section class="slide">
     <div class="masthead reveal d1"><span class="eyebrow">09 · Demonstration — as answered</span><span class="eyebrow r">Captured from the running system</span></div>
     <div class="body">
-        <p class="standfirst reveal d1" style="margin-bottom:26px">Three questions, three different mechanisms: retrieval over the corpus, exact lookup, and reconstruction from published lists.</p>
+        <p class="standfirst reveal d1" style="margin-bottom:26px">The same three questions as the live demo, already answered: a fixed rule, a computed table, and a computed total.</p>
         <div class="replay">
             <div class="rp reveal d2">
-                <p class="ask">how many computer engineering seats does pulchowk have?</p>
-                <p class="ans">Pulchowk Campus has <span class="fig">36</span> Regular seats and <span class="fig">60</span> Full Fee seats for Computer Engineering.<span class="caret"></span></p>
-                <div class="src"><b>Sources</b>IOE BE/BArch Admission Booklet 2083 — campuses, seats and quotas</div>
+                <p class="ask">help me fill the priority form</p>
+                <p class="ans">Pulchowk applicants rank up to <span class="fig">16</span> priorities — each of its <span class="fig">8</span> programmes listed once Regular, once Full Fee. The rule to get right: an applicant published in a lower priority who does not take it is excluded from the process entirely — not held in line for a higher priority on the same list.<span class="caret"></span></p>
+                <div class="src"><b>Sources</b>Pulchowk Campus admission notice, 2083 — section 5, priority order rules</div>
             </div>
             <div class="rp reveal d4">
-                <p class="ask">did form 2083-4001 pass?</p>
-                <p class="ans">Yes. The candidate is on the published 2083 pass list — Manan Shrestha, Morang district, merit rank <span class="fig">1</span>, alphabetical serial <span class="fig">3131</span>.<span class="caret"></span></p>
-                <div class="src"><b>Sources</b>BE/BArch Entrance Examination Result 2083 — published pass list</div>
+                <p class="ask">what courses are offered in pulchowk campus and what are the seats available</p>
+                <p class="ans">Pulchowk offers <span class="fig">8</span> programmes. Computer Engineering: <span class="fig">36</span> Regular / <span class="fig">60</span> Full Fee. Civil: <span class="fig">108</span> / <span class="fig">84</span>. Electrical: <span class="fig">36</span> / <span class="fig">60</span>. Architecture, Electronics &amp; Comm., and Mechanical: <span class="fig">24</span> / <span class="fig">24</span> each. Aerospace and Chemical: <span class="fig">12</span> / <span class="fig">36</span> each.<span class="caret"></span></p>
+                <div class="src"><b>Sources</b>IOE BE/BArch Admission Booklet 2083 — campuses, seats and quotas</div>
             </div>
             <div class="rp reveal d6">
-                <p class="ask">what was the cutoff for civil at thapathali?</p>
-                <p class="ans">The first list closed at rank <span class="fig">387</span> in 2082. Earlier years: <span class="fig">278</span>, <span class="fig">273</span>, <span class="fig">310</span>.<span class="caret"></span></p>
-                <div class="src"><b>Sources</b>Thapathali Campus first admission list, 2082 — via the published cut-off record</div>
+                <p class="ask">what is the fee at ioe, for both regular and full fee</p>
+                <p class="ans">Regular: <span class="fig">72,287</span> for the whole degree, <span class="fig">19,269</span> due on admission day. Full Fee: <span class="fig">591,632</span> for the whole degree, <span class="fig">218,070</span> due on admission day.<span class="caret"></span></p>
+                <div class="src"><b>Sources</b>IOE fee structure notice, 2083 — per-category fee schedule</div>
             </div>
         </div>
     </div>
@@ -745,9 +806,10 @@ body.editing [contenteditable="true"]:focus { outline: 2px solid var(--lapis); o
 
 <div class="deck-controls">
     <button id="prevBtn" aria-label="Previous slide">◀</button>
-    <span id="counter">1 / 14</span>
+    <span id="counter">1 / 17</span>
     <button id="nextBtn" aria-label="Next slide">▶</button>
 </div>
+<div class="deck-progress"><div class="deck-progress-bar" id="progressBar"></div></div>
 </div>
 
 <script>
@@ -760,6 +822,7 @@ class SlidePresentation {
         this.slides = Array.from(document.querySelectorAll('.slide'));
         this.stage = document.getElementById('deckStage');
         this.counter = document.getElementById('counter');
+        this.progressBar = document.getElementById('progressBar');
         this.current = 0;
         this.setupStageScale();
         this.setupKeyboardNav();
@@ -840,6 +903,7 @@ class SlidePresentation {
             slide.classList.toggle('visible', on);
         });
         this.counter.textContent = `${this.current + 1} / ${this.slides.length}`;
+        this.progressBar.style.width = `${((this.current + 1) / this.slides.length) * 100}%`;
         try { localStorage.setItem('sarathi-deck-slide', String(this.current)); } catch (err) { /* private mode */ }
     }
 
